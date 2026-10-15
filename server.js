@@ -19,7 +19,9 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const https = require('https');
+const http = require('http');
+const { URL } = require('url');
 
 const app = express();
 const PORT = process.env.PORT || 3721;
@@ -80,26 +82,26 @@ function getCurrentBackend() {
     return backend;
 }
 
-// ===== 读取 body.html / app.js（前端资源较大，运行时内联进 index.html）=====
+// ===== 读取 body.html / app.js / index.html（前端资源较大，启动时一次读入内存）=====
 const bodyHtml = fs.readFileSync(path.join(__dirname, 'public', 'body.html'), 'utf-8');
 const appJsSource = fs.readFileSync(path.join(__dirname, 'public', 'js', 'app.js'), 'utf-8');
+const indexHtmlSource = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
 // 缓存破坏版本号：随 app.js 内容变化，确保浏览器/预览始终拿到最新版本
 const APPJS_VERSION = crypto.createHash('md5').update(appJsSource).digest('hex').slice(0, 8);
+// 首页完整 HTML：启动时拼装一次，每次请求直接返回（避免重复读盘 + 字符串替换）
+const fullHtml = indexHtmlSource.replace(
+    '</body>',
+    `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n</body>`
+);
 
-// ===== 首页：内联 body.html + 注入核心前端脚本 =====
-// 注意：原始提取的 body.html 并不引用 app.js（核心逻辑），
-// 必须在此显式注入，否则事件监听不会绑定、页面不可交互。
-app.use((req, res, next) => {
-    if (req.path === '/' || req.path === '/index.html') {
-        const indexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
-        const fullHtml = indexHtml.replace(
-            '</body>',
-            `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n</body>`
-        );
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.send(fullHtml);
-    }
-    next();
+// ===== 首页：直接返回预拼装的完整 HTML =====
+app.get('/', (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(fullHtml);
+});
+app.get('/index.html', (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(fullHtml);
 });
 
 // ===== 静态资源（禁用强缓存，避免浏览器拿到旧版脚本）=====
@@ -238,29 +240,49 @@ function createApiProxy() {
             if (saveLocal && ct.includes('application/json')) {
                 const chunks = [];
                 proxyRes.on('data', (c) => chunks.push(c));
-                proxyRes.on('end', () => {
+                proxyRes.on('end', async () => {
                     const rawBuffer = Buffer.concat(chunks);
-                    const raw = rawBuffer.toString('utf8');
-                    rewriteAssetUrls(raw)
-                        .then((newBody) => {
-                            // 改写后长度变了：去掉 chunked，设置精确 Content-Length
-                            delete proxyRes.headers['transfer-encoding'];
-                            proxyRes.headers['content-length'] = Buffer.byteLength(newBody);
-                            res.writeHead(proxyRes.statusCode, proxyRes.headers);
-                            res.end(newBody);
-                        })
-                        .catch(() => {
-                            // JSON 解析失败（如压缩体）→ 原样返回，不影响客户端
-                            res.writeHead(proxyRes.statusCode, proxyRes.headers);
-                            res.end(rawBuffer);
-                        });
+                    // 支持 gzip/deflate 压缩体：解压后再解析
+                    const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
+                    let bodyStr;
+                    try {
+                        if (encoding === 'gzip') {
+                            bodyStr = require('zlib').gunzipSync(rawBuffer).toString('utf8');
+                        } else if (encoding === 'deflate') {
+                            bodyStr = require('zlib').inflateSync(rawBuffer).toString('utf8');
+                        } else {
+                            bodyStr = rawBuffer.toString('utf8');
+                        }
+                    } catch (e) {
+                        // 解压失败 → 原样返回
+                        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                        return res.end(rawBuffer);
+                    }
+                    try {
+                        const newBody = await rewriteAssetUrls(bodyStr);
+                        // 改写后长度变了：去掉 chunked，设置精确 Content-Length
+                        delete proxyRes.headers['transfer-encoding'];
+                        delete proxyRes.headers['content-encoding'];
+                        proxyRes.headers['content-length'] = Buffer.byteLength(newBody);
+                        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                        res.end(newBody);
+                    } catch (e) {
+                        console.error('[SaveLocal] 改写异常:', e.message);
+                        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                        res.end(rawBuffer);
+                    }
                 });
                 return;
             }
 
             // 默认：手动写入状态码+头，再管道 body（selfHandleResponse 要求完全自处理）
             res.writeHead(proxyRes.statusCode, proxyRes.headers);
-            proxyRes.pipe(res);
+            proxyRes.pipe(res).on('error', (err) => {
+                console.error('[Pipe Error]', err.message);
+                if (!res.headersSent) {
+                    res.status(502).json({ error: 'Pipe error', message: err.message });
+                }
+            });
         },
         onError: (err, req, res) => {
             console.error('[Proxy Error]', err.message);
@@ -277,18 +299,40 @@ const ASSET_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|mp4|mov|webm|avi)(\?|$)/i;
 
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
-        const proxy = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
-        const args = ['-sSL', '--max-time', '60'];
-        if (proxy) args.push('-x', proxy);
-        args.push('-o', dest, url);
-        const child = spawn('curl', args, { stdio: 'ignore' });
-        child.on('close', (code) => {
-            try {
-                if (code === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 0) resolve();
-                else reject(new Error(`curl exit ${code} 或文件为空`));
-            } catch (e) { reject(e); }
+        const parsed = new URL(url);
+        const mod = parsed.protocol === 'https:' ? https : http;
+        const opts = {
+            hostname: parsed.hostname,
+            port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+            path: parsed.pathname + parsed.search,
+            method: 'GET',
+            headers: { 'User-Agent': 'LinzhiAI-Local-Proxy/1.0' },
+            timeout: 60000,
+        };
+        const req = mod.request(opts, (res) => {
+            // 重定向跟随（3xx）
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                res.resume();
+                return downloadFile(res.headers.location, dest).then(resolve).catch(reject);
+            }
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+                res.resume();
+                return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+            }
+            const chunks = [];
+            res.on('data', (c) => chunks.push(c));
+            res.on('end', () => {
+                try {
+                    const buf = Buffer.concat(chunks);
+                    if (buf.length === 0) return reject(new Error('空响应'));
+                    fs.writeFileSync(dest, buf);
+                    resolve();
+                } catch (e) { reject(e); }
+            });
         });
-        child.on('error', reject);
+        req.on('error', (e) => reject(new Error(`请求失败: ${e.message}`)));
+        req.on('timeout', () => { req.destroy(); reject(new Error('下载超时')); });
+        req.end();
     });
 }
 
@@ -327,24 +371,38 @@ async function rewriteAssetUrls(body) {
     async function walk(node, depth) {
         if (depth > 10) return; // 防止过深/环状结构
         if (Array.isArray(node)) {
+            // 收集所有需要下载的字符串 URL，批量并发
+            const tasks = [];
             for (let i = 0; i < node.length; i++) {
                 const v = node[i];
                 if (typeof v === 'string') {
-                    const nv = await maybeSaveLocal(v);
-                    if (nv !== v) node[i] = nv;
+                    tasks.push({ idx: i, val: v });
                 } else if (v && typeof v === 'object') {
                     await walk(v, depth + 1);
                 }
             }
+            if (tasks.length > 0) {
+                const results = await Promise.all(tasks.map(t => maybeSaveLocal(t.val)));
+                results.forEach((nv, i) => {
+                    if (nv !== tasks[i].val) node[tasks[i].idx] = nv;
+                });
+            }
         } else if (node && typeof node === 'object') {
-            for (const key of Object.keys(node)) {
+            const keys = Object.keys(node);
+            const tasks = [];
+            for (const key of keys) {
                 const v = node[key];
                 if (typeof v === 'string') {
-                    const nv = await maybeSaveLocal(v);
-                    if (nv !== v) node[key] = nv;
+                    tasks.push({ key, val: v });
                 } else if (v && typeof v === 'object') {
                     await walk(v, depth + 1);
                 }
+            }
+            if (tasks.length > 0) {
+                const results = await Promise.all(tasks.map(t => maybeSaveLocal(t.val)));
+                results.forEach((nv, i) => {
+                    if (nv !== tasks[i].val) node[tasks[i].key] = nv;
+                });
             }
         }
     }
