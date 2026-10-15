@@ -16,11 +16,17 @@
 
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3721;
+
+// ===== 本地资源目录（SAVE_LOCAL=1 时，生成结果的外链图片/视频会下载到这里）=====
+const OUTPUT_DIR = path.join(__dirname, 'output');
+fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
 // ===== 默认配置（不含任何明文密钥）=====
 const DEFAULT_CONFIG = {
@@ -74,18 +80,21 @@ function getCurrentBackend() {
     return backend;
 }
 
-// ===== 读取 body.html（前端 body 较大，运行时内联进 index.html）=====
+// ===== 读取 body.html / app.js（前端资源较大，运行时内联进 index.html）=====
 const bodyHtml = fs.readFileSync(path.join(__dirname, 'public', 'body.html'), 'utf-8');
+const appJsSource = fs.readFileSync(path.join(__dirname, 'public', 'js', 'app.js'), 'utf-8');
+// 缓存破坏版本号：随 app.js 内容变化，确保浏览器/预览始终拿到最新版本
+const APPJS_VERSION = crypto.createHash('md5').update(appJsSource).digest('hex').slice(0, 8);
 
 // ===== 首页：内联 body.html + 注入核心前端脚本 =====
-// 注意：原始提取的 body.html 并不引用 app.js（898KB 核心逻辑），
+// 注意：原始提取的 body.html 并不引用 app.js（核心逻辑），
 // 必须在此显式注入，否则事件监听不会绑定、页面不可交互。
 app.use((req, res, next) => {
     if (req.path === '/' || req.path === '/index.html') {
         const indexHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
         const fullHtml = indexHtml.replace(
             '</body>',
-            `${bodyHtml}\n<script src="/js/app.js"></script>\n</body>`
+            `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n</body>`
         );
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(fullHtml);
@@ -93,9 +102,15 @@ app.use((req, res, next) => {
     next();
 });
 
-// ===== 静态资源 =====
-app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
-app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
+// ===== 静态资源（禁用强缓存，避免浏览器拿到旧版脚本）=====
+app.use('/css', express.static(path.join(__dirname, 'public', 'css'), {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+}));
+app.use('/js', express.static(path.join(__dirname, 'public', 'js'), {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+}));
+// 本地保存的生成资源（图片/视频），SAVE_LOCAL=1 时页面引用会被改写到 /output/*
+app.use('/output', express.static(OUTPUT_DIR));
 
 // ===== 后端管理 API =====
 app.use('/api-backend', express.json());
@@ -181,8 +196,16 @@ function createApiProxy() {
         secure: target.startsWith('https://') && !target.includes('localhost'),
         cookieDomainRewrite: '',
         timeout: 120000,
+        // ★ 必须设 selfHandleResponse: true，否则 http-proxy 会在 onProxyRes 之后
+        //   自动 proxyRes.pipe(res)，与 SAVE_LOCAL 的手动 res.end(newBody) 冲突
+        //   （headers already sent → 静默降级返回原始 body，本地改写失效）
+        selfHandleResponse: true,
         onProxyReq: (proxyReq, req, res) => {
             proxyReq.setHeader('Host', new URL(target).hostname);
+
+            // 重写 Origin 为后端自身 origin（同源），规避后端 CORS 允许列表校验
+            // 远端后端仅放行其自身域名，127.0.0.1/localhost 均不在列表内
+            proxyReq.setHeader('Origin', new URL(target).origin);
 
             // 后端默认 Key
             if (apiKey) {
@@ -203,13 +226,41 @@ function createApiProxy() {
             proxyReq.setHeader('User-Agent', req.headers['user-agent'] || 'LinzhiAI-Local-Proxy');
         },
         onProxyRes: (proxyRes, req, res) => {
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Cookie');
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-            delete proxyRes.headers['access-control-allow-origin'];
-            delete proxyRes.headers['access-control-allow-methods'];
-            delete proxyRes.headers['access-control-allow-headers'];
+            // CORS：直接写到 proxyRes.headers 上，随 writeHead 透传到 res
+            proxyRes.headers['access-control-allow-origin'] = '*';
+            proxyRes.headers['access-control-allow-methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+            proxyRes.headers['access-control-allow-headers'] = 'Content-Type, Authorization, x-api-key, Cookie';
+            proxyRes.headers['access-control-allow-credentials'] = 'true';
+
+            // SAVE_LOCAL=1 时：把 JSON 结果里的外链图片/视频 URL 下载到本地并改写
+            const saveLocal = process.env.SAVE_LOCAL === '1';
+            const ct = (proxyRes.headers['content-type'] || '');
+            if (saveLocal && ct.includes('application/json')) {
+                const chunks = [];
+                proxyRes.on('data', (c) => chunks.push(c));
+                proxyRes.on('end', () => {
+                    const rawBuffer = Buffer.concat(chunks);
+                    const raw = rawBuffer.toString('utf8');
+                    rewriteAssetUrls(raw)
+                        .then((newBody) => {
+                            // 改写后长度变了：去掉 chunked，设置精确 Content-Length
+                            delete proxyRes.headers['transfer-encoding'];
+                            proxyRes.headers['content-length'] = Buffer.byteLength(newBody);
+                            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                            res.end(newBody);
+                        })
+                        .catch(() => {
+                            // JSON 解析失败（如压缩体）→ 原样返回，不影响客户端
+                            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+                            res.end(rawBuffer);
+                        });
+                });
+                return;
+            }
+
+            // 默认：手动写入状态码+头，再管道 body（selfHandleResponse 要求完全自处理）
+            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+            proxyRes.pipe(res);
         },
         onError: (err, req, res) => {
             console.error('[Proxy Error]', err.message);
@@ -218,6 +269,85 @@ function createApiProxy() {
             }
         }
     });
+}
+
+// ===== 本地资源保存（SAVE_LOCAL=1 时启用）=====
+// 只认图片/视频后缀的外链 URL，避免误下载模型缩略图等
+const ASSET_EXT_RE = /\.(png|jpe?g|webp|gif|bmp|mp4|mov|webm|avi)(\?|$)/i;
+
+function downloadFile(url, dest) {
+    return new Promise((resolve, reject) => {
+        const proxy = (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '').trim();
+        const args = ['-sSL', '--max-time', '60'];
+        if (proxy) args.push('-x', proxy);
+        args.push('-o', dest, url);
+        const child = spawn('curl', args, { stdio: 'ignore' });
+        child.on('close', (code) => {
+            try {
+                if (code === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 0) resolve();
+                else reject(new Error(`curl exit ${code} 或文件为空`));
+            } catch (e) { reject(e); }
+        });
+        child.on('error', reject);
+    });
+}
+
+async function maybeSaveLocal(url) {
+    if (typeof url !== 'string' || !url) return url;
+    if (!ASSET_EXT_RE.test(url)) return url;
+    let parsed;
+    try { parsed = new URL(url); } catch { return url; }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return url;
+    if (url.startsWith('/output')) return url; // 已是本地路径
+
+    const extMatch = parsed.pathname.match(/\.([a-z0-9]+)$/i);
+    const ext = (extMatch ? extMatch[1] : 'bin').toLowerCase();
+    const hash = crypto.createHash('md5').update(url).digest('hex').slice(0, 12);
+    const filename = `${hash}.${ext}`;
+    const localPath = path.join(OUTPUT_DIR, filename);
+    const localUrl = `/output/${filename}`;
+
+    if (fs.existsSync(localPath) && fs.statSync(localPath).size > 0) return localUrl; // 已缓存
+
+    try {
+        await downloadFile(url, localPath);
+        return localUrl;
+    } catch (e) {
+        console.warn('[SaveLocal] 下载失败，保留原 URL:', url, '|', e.message);
+        return url; // 降级：不影响页面展示
+    }
+}
+
+async function rewriteAssetUrls(body) {
+    let data;
+    try { data = JSON.parse(body); } catch { return body; }
+    await walk(data, 0);
+    return JSON.stringify(data);
+
+    async function walk(node, depth) {
+        if (depth > 10) return; // 防止过深/环状结构
+        if (Array.isArray(node)) {
+            for (let i = 0; i < node.length; i++) {
+                const v = node[i];
+                if (typeof v === 'string') {
+                    const nv = await maybeSaveLocal(v);
+                    if (nv !== v) node[i] = nv;
+                } else if (v && typeof v === 'object') {
+                    await walk(v, depth + 1);
+                }
+            }
+        } else if (node && typeof node === 'object') {
+            for (const key of Object.keys(node)) {
+                const v = node[key];
+                if (typeof v === 'string') {
+                    const nv = await maybeSaveLocal(v);
+                    if (nv !== v) node[key] = nv;
+                } else if (v && typeof v === 'object') {
+                    await walk(v, depth + 1);
+                }
+            }
+        }
+    }
 }
 
 // ===== /api/* 走代理 =====

@@ -10,3 +10,6 @@ npm-debug.log*
 
 # 系统
 .DS_Store
+
+# 本地保存的生成资源（SAVE_LOCAL=1 时下载到此，勿提交）
+output/
