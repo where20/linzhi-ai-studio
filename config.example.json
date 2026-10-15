@@ -1,0 +1,18 @@
+{
+  "_comment": "本文件为配置模板。复制为 config.json 后填入你自己的后端信息。config.json 已被 .gitignore 忽略，不会提交到仓库。",
+  "backends": {
+    "original": {
+      "name": "复刻网站原站 (Demo)",
+      "target": "https://agnes-ai-studio-02306.app.workbuddy.host",
+      "apiKey": "在此填入你的 API Key，或留空改用 API_KEY 环境变量",
+      "description": "原站后端。需自备 API Key 才能调用 AI 能力。"
+    },
+    "my-local": {
+      "name": "我的本地后端",
+      "target": "http://localhost:8080",
+      "apiKey": "",
+      "description": "示例：自建/兼容后端，把 target 改成你的服务地址即可。"
+    }
+  },
+  "active": "original"
+}

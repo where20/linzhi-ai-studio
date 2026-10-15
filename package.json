@@ -1,0 +1,22 @@
+{
+  "name": "linzhi-ai-studio",
+  "version": "1.0.0",
+  "description": "临智AI (Linzhi AI Studio) 本地复刻 + 可自定义后端代理项目。前端完整复刻，API 可代理到任意后端。",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "linzhi-ai",
+    "reverse-proxy",
+    "ai-studio",
+    "replica"
+  ],
+  "author": "xiaoan",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^2.0.6"
+  }
+}
