@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>AI 生图工作台 · 临智AI</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/home.css?v=1.8.394">
+<link rel="stylesheet" href="assets/css/glass.css?v=1.8.394">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="index.html">
+        <span class="brand__logo">🧭</span>
+        <span class="brand__name">临智AI</span>
+      </a>
+      <nav class="topnav">
+      <a href="index.html"><span class="nav-ico">🏠</span> 首页</a>
+      <a href="home.html" class="active"><span class="nav-ico">🎨</span> 试装</a>
+      <a href="collect.html"><span class="nav-ico">👗</span> 收集</a>
+      <a href="batch.html"><span class="nav-ico">📦</span> 批量</a>
+      <a href="pose.html"><span class="nav-ico">🧍</span> 姿鉴</a>
+      <a href="costume.html"><span class="nav-ico">👚</span> 衣鉴</a>
+      <a href="settings.html"><span class="nav-ico">⚙</span> 设置</a>
+      </nav>
+    </div>
+  </header>
+
+<main class="main workbench-main">
+  <div class="layout">
+
+    <!-- ============ 第一行两格：上传人像 + 提示词 ============ -->
+    <div class="row-split row-split--2">
+
+    <!-- 第一格：上传自己的人像 -->
+    <section class="panel panel--portrait">
+      <div class="panel__head">
+        <h2><span class="step">1</span> 人象</h2>
+        <span class="hint">上传后将以图生图方式生成，保持人物特征</span>
+      </div>
+      <div class="portrait-body" id="portraitBody">
+        <label class="upload" id="uploadArea">
+          <input type="file" id="portraitInput" accept="image/*" hidden>
+          <span class="upload__icon">📷</span>
+          <span class="upload__text">点击或拖拽上传人像</span>
+          <span class="upload__hint">支持 JPG / PNG / WEBP</span>
+        </label>
+        <div class="portrait-preview" id="portraitPreview" hidden>
+          <img id="portraitPreviewImg" alt="人像预览">
+          <button type="button" class="btn btn--danger btn--sm" id="btnRemovePortrait">移除</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 第二格：提示词输入 -->
+    <section class="panel panel--prompt">
+      <div class="panel__head">
+        <h2><span class="step">1</span> 提示词（Prompt）</h2>
+        <div class="prompt-tools">
+          <button type="button" class="btn btn--ghost" id="btnAiPrompt">✨ AI 优化</button>
+          <button type="button" class="btn btn--ghost" id="btnClearPrompt">清空</button>
+          <button type="button" class="btn btn--ghost" id="btnRandomPrompt">🎲 随机</button>
+        </div>
+      </div>
+      <textarea id="promptInput" rows="4" placeholder="描述你想要生成的画面……例如：一位穿红色连衣裙的少女站在樱花树下，回眸微笑，电影感光线，8K 细节"></textarea>
+      <div class="prompt-meta">
+        <span id="promptCount">0 字</span>
+        <span class="hint">提示词越详细，生成效果越好</span>
+      </div>
+      <!-- AI 优化结果预览 -->
+      <div class="ai-panel" id="aiPromptPanel" hidden>
+        <div class="ai-panel__head">
+          <span>✨ 点点 AI 优化结果</span>
+          <div class="ai-panel__btns">
+            <button type="button" class="btn btn--sm" id="btnAiApply">✓ 采用</button>
+            <button type="button" class="btn btn--sm btn--ghost" id="btnAiDiscard">✕ 放弃</button>
+          </div>
+        </div>
+        <textarea id="aiPromptResult" rows="3" readonly></textarea>
+      </div>
+    </section>
+
+    </div><!-- /.row-split -->
+
+    <!-- ============ 第二行两格：AI 推演穿搭 + 模型选择 ============ -->
+    <div class="row-split row-split--2 row-split--deduce">
+    <section class="panel panel--deduce" id="deduce">
+      <div class="panel__head">
+        <h2><span class="step">2</span> AI 推演穿搭</h2>
+        <span class="hint">输入身高、体重、短裙还是长裤等简单喜好，点点 AI 为你推演最适合的姿鉴 + 衣鉴，可一键生成新图</span>
+      </div>
+
+      <div class="deduce-body">
+        <div class="deduce-input">
+          <div class="field">
+            <label for="deduceDesc">我的喜好（身高 / 体重 / 场合 / 短裙或长裤…）</label>
+            <textarea id="deduceDesc" rows="2" placeholder="例如：身高165cm，体重52kg，喜欢甜美风，想穿短裙去约会"></textarea>
+          </div>
+          <div class="deduce-btns">
+            <button type="button" class="btn btn--primary btn--sm" id="btnDeduce">🧠 开始推演</button>
+            <button type="button" class="btn btn--sm btn--ghost" id="btnDeduceUsePrompt">用提示词</button>
+            <button type="button" class="btn btn--sm" id="btnDeduceGenerate">⚡ 一键生成新图</button>
+          </div>
+          <div class="hint" style="margin-top:6px;">
+            推演会为你选好最合适的姿鉴与衣鉴，并可一键生成「人像 + 姿鉴 + 衣鉴」的新图。
+          </div>
+        </div>
+
+        <div class="deduce-result" id="deduceResult" hidden>
+          <div class="deduce-tags">
+            <div class="deduce-tag" id="deducePoseTag" hidden>
+              <span class="deduce-tag__label">姿鉴</span>
+              <span class="deduce-tag__value" id="deducePoseName">—</span>
+            </div>
+            <div class="deduce-tag" id="deduceCostumeTag" hidden>
+              <span class="deduce-tag__label">衣鉴</span>
+              <span class="deduce-tag__value" id="deduceCostumeName">—</span>
+            </div>
+          </div>
+          <div class="deduce-why" id="deduceWhy"></div>
+          <div class="deduce-btns">
+            <button type="button" class="btn btn--sm btn--ghost" id="btnDeduceClose">✕ 收起结果</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+        <!-- 模型选择：移到第二行，与 AI 推演并排 -->
+    <section class="panel panel--model">
+      <div class="panel__head">
+        <h2><span class="step">1</span> 模型选择</h2>
+        <span class="badge badge--model" id="providerBadge">商汤</span>
+      </div>
+      <div class="model-picker">
+        <div class="field">
+          <label for="provider">模型</label>
+          <!-- 选项由 assets/js/model-presets.js 统一生成，与「设置」页同一份清单 -->
+          <select id="provider"></select>
+        </div>
+        <div class="field">
+          <label for="size">尺寸</label>
+          <!-- 选项由 model-presets.js 按「当前模型」动态生成：商汤走 2K 档，AGNES 有 1K/2K 档 -->
+          <select id="size"></select>
+          <small class="field-hint" id="sizeHint">尺寸随模型自动匹配</small>
+        </div>
+        <div class="field">
+          <label for="outputFormat">输出格式</label>
+          <select id="outputFormat">
+            <option value="png">PNG</option>
+            <option value="jpeg">JPEG</option>
+            <option value="webp">WEBP</option>
+          </select>
+        </div>
+        <div class="field field--check">
+          <label class="check">
+            <input type="checkbox" id="watermark" checked>
+            <span>关闭水印</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="promptExtend">
+            <span>提示词润色</span>
+          </label>
+        </div>
+        <div class="model-hint">
+          🔑 API Key 与接入地址在<a href="settings.html">「设置」</a>中统一管理。
+        </div>
+      </div>
+    </section>
+
+    </div><!-- /.row-split row-split--2 -->
+
+    <!-- ============ 第三层：姿势图鉴 + 衣装图鉴 ============ -->
+    <section class="panel panel--atlas">
+      <div class="panel__head">
+        <h2><span class="step">3</span> 图鉴参考（可选）</h2>
+        <span class="hint">人像为首，姿鉴为形，衣鉴为装 —— 左选右看，随人像一起参与生成</span>
+      </div>
+      <div class="atlas-warn" id="atlasWarn" hidden></div>
+
+      <!-- 2×2 布局：上排两格选择区（姿鉴 / 衣鉴），下排两格预览区（姿鉴预览在前 / 衣鉴预览在后），平分两列 -->
+      <div class="atlas-grid">
+        <!-- 姿鉴：系列 / 分类 / 姿势+角度（姿势与角度并排两格） -->
+        <div class="atlas-col atlas-col--stack">
+          <div class="atlas-picks">
+            <div class="atlas-col__head">
+              <h3>🧍 姿鉴</h3>
+              <span class="atlas-col__tip">选择体形 / 姿势</span>
+            </div>
+            <div class="field">
+              <label>姿鉴系列</label>
+              <div class="chip-group" id="poseSeriesGroup"></div>
+              <select id="poseSeries" hidden><option value="">全部系列</option></select>
+            </div>
+            <div class="field">
+              <label>姿鉴分类</label>
+              <div class="chip-group" id="poseCategoryGroup"></div>
+              <select id="poseCategory" hidden><option value="">全部分类</option></select>
+            </div>
+            <div class="pose-pair">
+              <div class="field">
+                <label for="poseSelect">姿势</label>
+                <select id="poseSelect" size="6"><option value="">— 请先选择姿鉴系列/姿鉴分类 —</option></select>
+              </div>
+              <div class="field">
+                <label>角度</label>
+                <div class="chip-group chip-group--angles" id="poseAngleGroup"></div>
+                <select id="poseAngle" hidden>
+                  <option value="front">正面</option>
+                  <option value="diagonal">斜侧</option>
+                  <option value="side">侧面</option>
+                  <option value="high">俯视</option>
+                  <option value="low">仰视</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 衣鉴：分类 / 品类 / 色系+服装编号（色系与服装编号并排两格） -->
+        <div class="atlas-col atlas-col--stack">
+          <div class="atlas-picks">
+            <div class="atlas-col__head">
+              <h3>👚 衣鉴</h3>
+              <span class="atlas-col__tip">选择服装</span>
+            </div>
+            <div class="field">
+              <label>衣鉴分类</label>
+              <div class="chip-group" id="costumeCategoryGroup"></div>
+              <select id="costumeCategory" hidden><option value="">全部分类</option></select>
+            </div>
+            <div class="field">
+              <label>衣鉴品类</label>
+              <div class="chip-group" id="costumeGroupGroup"></div>
+              <select id="costumeGroup" hidden><option value="">全部品类</option></select>
+            </div>
+            <div class="costume-pair">
+              <div class="field">
+                <label for="costumeColor">色系</label>
+                <select id="costumeColor" size="6"><option value="">全部颜色</option></select>
+              </div>
+              <div class="field">
+                <label for="costumeSelect">服装（编号）</label>
+                <select id="costumeSelect" size="6"><option value="">— 请先选择分类 / 品类 / 颜色 —</option></select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 预览区：姿鉴预览在前、衣鉴预览在后，两格平分 -->
+        <div class="atlas-previews">
+          <div class="preview preview--pose" id="posePreview">
+            <img id="posePreviewImg" alt="姿势预览" hidden>
+            <span class="preview__empty" id="posePreviewEmpty">未选择姿势</span>
+          </div>
+          <div class="preview preview--costume" id="costumePreview">
+            <img id="costumePreviewImg" alt="衣装预览" hidden>
+            <span class="preview__empty" id="costumePreviewEmpty">未选择服装</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 生成按钮 + 结果 ============ -->
+    <section class="panel panel--action">
+      <button type="button" class="btn btn--progress" id="btnGenerate">
+        <span class="gen-bar" id="genBar" aria-hidden="true"></span>
+        <span class="gen-label" id="genLabel"><span class="btn__icon">⚡</span> 开始生成</span>
+      </button>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="panel panel--result" id="resultPanel" hidden>
+      <div class="panel__head">
+        <h2>生成结果</h2>
+        <div class="result-tools">
+          <a class="btn btn--ghost" id="btnDownload" download>⬇ 下载</a>
+          <a class="btn btn--ghost" id="btnOpenFull" target="_blank" rel="noopener">↗ 原图</a>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="result-image-wrap">
+          <img id="resultImg" alt="生成结果" class="result-image">
+        </div>
+        <div class="result-meta" id="resultMeta"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="footer">
+  <p>本地生图服务 · 支持 商汤 / AGNES / 千问 / 豆包 / 混元 / 自定义 API · 生成的图片保存在 <code>generated/</code> 目录</p>
+</footer>
+
+<script src="assets/js/img-prep.js?v=1.8.394"></script>
+<script src="assets/js/model-presets.js?v=1.8.394"></script>
+<script src="assets/js/workspace-state.js?v=1.8.394"></script>
+<script src="assets/js/api-client.js?v=1.8.394"></script>
+<script type="module" src="assets/js/home.js?v=1.8.394"></script>
+<script src="assets/js/topbar-breath.js?v=1.8.394"></script>
+<script src="assets/js/nav-lock.js?v=1.8.394"></script>
+<script src="assets/js/qrcode-modal.js?v=1.8.394"></script>
+<script src="assets/js/img-degrade.js?v=1.8.394"></script>
+<script src="assets/js/no-url.js?v=1.8.394"></script>
+</body>
+</html>

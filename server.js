@@ -12,6 +12,11 @@
  * ⚠️ 安全说明：
  *  - 原站 API Key 不会硬编码进仓库。请通过环境变量 API_KEY 或 config.json 提供。
  *  - 默认 original 后端仅提供 target 地址，apiKey 为空时会在日志提示需要自建/自备 Key。
+ *
+ * ⚠️ 独立的「koudai 店铺主页复刻」项目已于 2026-10-17 迁出本文件：
+ *    它的静态资源 + 17itou/体彩 API 反代 + 本地账号适配层现在由
+ *    `REA/koudai/server.js`（端口 3722）独立承载，`npm start` 即可。
+ *    本文件不再包含任何 koudai 逻辑，两者互不依赖。
  */
 
 const express = require('express');
@@ -52,8 +57,9 @@ function loadConfig() {
     if (fs.existsSync(CONFIG_PATH)) {
         try {
             const fileConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-            // 与默认配置合并，确保新增字段有兜底
+            // 与默认配置合并，确保新增字段有兜底；其余字段（如 ai）原样保留
             return {
+                ...fileConfig,
                 backends: { ...DEFAULT_CONFIG.backends, ...(fileConfig.backends || {}) },
                 active: fileConfig.active || DEFAULT_CONFIG.active
             };
@@ -86,12 +92,15 @@ function getCurrentBackend() {
 const bodyHtml = fs.readFileSync(path.join(__dirname, 'public', 'body.html'), 'utf-8');
 const appJsSource = fs.readFileSync(path.join(__dirname, 'public', 'js', 'app.js'), 'utf-8');
 const indexHtmlSource = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
+// 合剪模块（✂️ AI一键成片）：独立文件，body 末尾加载（与原站一致）
+const hejianJsSource = fs.readFileSync(path.join(__dirname, 'public', 'hejian', 'hejian.js'), 'utf-8');
 // 缓存破坏版本号：随 app.js 内容变化，确保浏览器/预览始终拿到最新版本
 const APPJS_VERSION = crypto.createHash('md5').update(appJsSource).digest('hex').slice(0, 8);
+const HEJIAN_VERSION = crypto.createHash('md5').update(hejianJsSource).digest('hex').slice(0, 8);
 // 首页完整 HTML：启动时拼装一次，每次请求直接返回（避免重复读盘 + 字符串替换）
 const fullHtml = indexHtmlSource.replace(
     '</body>',
-    `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n</body>`
+    `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n<script src="/hejian/hejian.js?v=${HEJIAN_VERSION}"></script>\n</body>`
 );
 
 // ===== 首页：直接返回预拼装的完整 HTML =====
@@ -111,8 +120,13 @@ app.use('/css', express.static(path.join(__dirname, 'public', 'css'), {
 app.use('/js', express.static(path.join(__dirname, 'public', 'js'), {
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
 }));
+app.use('/hejian', express.static(path.join(__dirname, 'public', 'hejian'), {
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+}));
 // 本地保存的生成资源（图片/视频），SAVE_LOCAL=1 时页面引用会被改写到 /output/*
 app.use('/output', express.static(OUTPUT_DIR));
+// 通用静态兜底：子页面（/poseatlas /jizura /codevideo 等）与根级图片（/logo.png 等）
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ===== 后端管理 API =====
 app.use('/api-backend', express.json());
@@ -408,11 +422,23 @@ async function rewriteAssetUrls(body) {
     }
 }
 
-// ===== /api/* 走代理 =====
+// ===== 本地适配层：门禁放行 / 本地配置 / Agnes 直连 AI / RSS 热点 / 作品墙 / 上传 =====
+// ⚠️ 必须在 /api 代理之前注册，命中本地路由的请求不再转发原站
+// JSON 解析只对本地处理的 POST 路径生效（全局解析会吃掉流，导致代理转发失败）
+const LOCAL_JSON_RE = /^\/api\/(member|auth|account|config|ai\/chat|image\/(generate|img2img|batch-submit)|video\/generate|gallery)/;
+app.use('/api', (req, res, next) => {
+    if (req.method === 'POST' && LOCAL_JSON_RE.test(req.originalUrl.split('?')[0])) return express.json()(req, res, next);
+    next();
+});
+const localApi = require('./local-api');
+localApi.install(app, { getConfig: () => config, saveConfig });
+
+// ===== /api/* 走代理（本地适配层未覆盖的端点兜底到这里）=====
 app.use('/api', (req, res, next) => {
     const proxy = createApiProxy();
     proxy(req, res, next);
 });
+
 
 // ===== OPTIONS 预检 =====
 app.options('*', (req, res) => {

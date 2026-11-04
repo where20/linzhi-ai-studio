@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>CV Studio</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;overflow:hidden}
+  canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<script src="./common.js"></script>
+<script src="./config.js"></script>
+<script>
+/* =========================================================================
+ * CV Studio — 通用代码视频场景页
+ * 一个页面承载全部风格；风格由 config.js 注入的 CV_CONFIG 决定。
+ * 铁律：renderFrame(t) 必须是纯函数 —— 禁 Date.now / Math.random / rAF。
+ * ========================================================================= */
+(function () {
+  var C = window.CV_CONFIG || {};
+  var FPS = C.fps || 30;
+  var ACCENT = C.accent || '#d97757';
+  var W = C.width || 1920, H = C.height || 1080;
+  var STYLES = (C.styles && C.styles.length) ? C.styles : ['cyber'];
+  var ROUNDS = C.rounds || 1;
+  var TITLE = C.title || 'CODE VIDEO';
+  var SUBTITLE = C.subtitle || '';
+  var TAGLINE = C.tagline || '';
+  var BRAND = C.brand || '';
+  var SEED = C.seed || 20261027;
+
+  var CN = '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif';
+  var EN = '"Impact","Arial Black","Haettenschweiler",sans-serif';
+  var MONO = '"JetBrains Mono","Consolas","Courier New",monospace';
+
+  /* ---------------- 时间轴 ---------------- */
+  var CARD_T = C.cardDuration || 1.2, SEG_T = C.segDuration || 3.0, END_T = C.endDuration || 2.6;
+  var total = CARD_T + STYLES.length * SEG_T * ROUNDS + END_T;
+  window.DURATION = total;
+
+  /* 段表：{type, style, index, t0, dur} */
+  var SEGS = [];
+  /* 🔴 V1.8.328 宿主适配：改成可重入 —— 宿主改配置（标题/风格/时长）后要能重算时间轴。
+     原版是一次性 IIFE，改配置后 DURATION 与 SEGS 会失配（画面停在旧时长）。 */
+  function build() {
+    SEGS = [];
+    CARD_T = (window.CV_CONFIG || {}).cardDuration || 1.2;
+    SEG_T = (window.CV_CONFIG || {}).segDuration || 3.0;
+    END_T = (window.CV_CONFIG || {}).endDuration || 2.6;
+    STYLES = ((window.CV_CONFIG || {}).styles && (window.CV_CONFIG || {}).styles.length)
+      ? window.CV_CONFIG.styles : ['cyber'];
+    ROUNDS = (window.CV_CONFIG || {}).rounds || 1;
+    total = CARD_T + STYLES.length * SEG_T * ROUNDS + END_T;
+    window.DURATION = total;
+    var t = 0;
+    SEGS.push({ type: 'card', t0: t, dur: CARD_T });
+    t += CARD_T;
+    for (var r = 0; r < ROUNDS; r++) {
+      for (var i = 0; i < STYLES.length; i++) {
+        SEGS.push({ type: 'style', style: STYLES[i], index: i, round: r, t0: t, dur: SEG_T });
+        t += SEG_T;
+      }
+    }
+    SEGS.push({ type: 'end', t0: t, dur: END_T });
+  }
+  build();
+
+  function segAt(t) {
+    for (var i = 0; i < SEGS.length; i++) {
+      var s = SEGS[i];
+      if (t >= s.t0 && t < s.t0 + s.dur) {
+        return { seg: s, local: t - s.t0, u: (t - s.t0) / s.dur };
+      }
+    }
+    var last = SEGS[SEGS.length - 1];
+    return { seg: last, local: last.dur, u: 1 };
+  }
+
+  /* ---------------- 通用绘制工具 ---------------- */
+  function bg(ctx, color) { ctx.fillStyle = color; ctx.fillRect(0, 0, W, H); }
+
+  function fitText(ctx, text, maxW, startPx, weight) {
+    var size = startPx;
+    do {
+      ctx.font = (weight || '700') + ' ' + size + 'px ' + CN;
+      if (ctx.measureText(text).width <= maxW) break;
+      size -= 2;
+    } while (size > 12);
+    return size;
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* 风格标签（左上胶囊） */
+  function tag(ctx, label, no) {
+    try {
+      CV.capsule(ctx, 48, 44, no + 1, label, { coral: ACCENT, fg: '#f5f2ec' });
+    } catch (e) { /* ignore */ }
+  }
+
+  /* 标题排版：大字 + 副标题 */
+  function headline(ctx, text, cx, cy, maxW, color, px) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    var size = fitText(ctx, text, maxW, px || 150);
+    ctx.font = '900 ' + size + 'px ' + CN;
+    ctx.fillText(text, cx, cy);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    return size;
+  }
+
+  /* =======================================================================
+   * 11 种风格绘制器 —— 签名 (ctx, t, u, S)  S={no,label,seed}
+   * ======================================================================= */
+
+  /* 01 扁平插画科普 */
+  function drawFlat(ctx, t, u, S) {
+    bg(ctx, '#fdf6ee');
+    var rnd = CV.mulberry32(S.seed);
+    var pal = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#a06cd5', '#3d8bfd'];
+    ctx.save();
+    for (var i = 0; i < 7; i++) {
+      var x = rnd() * W, y = rnd() * H, r = 90 + rnd() * 200;
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = pal[(i + S.no) % pal.length];
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    /* 弹入的图形 */
+    for (var j = 0; j < 5; j++) {
+      var p = CV.clamp((u - j * 0.12) / 0.35, 0, 1);
+      var e = CV.ease('outBack', p);
+      var bx = W * (0.16 + j * 0.17), by = H * 0.42;
+      var s = 150 * e;
+      ctx.fillStyle = pal[(j + S.no) % pal.length];
+      ctx.beginPath();
+      if (j % 3 === 0) { ctx.arc(bx, by, s * 0.5, 0, 6.283); ctx.fill(); }
+      else if (j % 3 === 1) { ctx.rect(bx - s * 0.4, by - s * 0.4, s * 0.8, s * 0.8); ctx.fill(); }
+      else {
+        ctx.moveTo(bx, by - s * 0.5); ctx.lineTo(bx + s * 0.5, by + s * 0.4);
+        ctx.lineTo(bx - s * 0.5, by + s * 0.4); ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#2b2118';
+    ctx.font = '800 76px ' + CN;
+    ctx.textAlign = 'center';
+    ctx.fillText(S.label, W / 2, H * 0.80);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  /* 02 数学动画 */
+  function drawMath(ctx, t, u, S) {
+    bg(ctx, '#0f1724');
+    ctx.strokeStyle = 'rgba(120,170,255,.13)';
+    ctx.lineWidth = 1;
+    for (var x = 0; x <= W; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (var y = 0; y <= H; y += 80) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    var ox = W * 0.18, oy = H * 0.72, sc = W * 0.00042;
+    ctx.strokeStyle = 'rgba(200,220,255,.55)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(ox - 40, oy); ctx.lineTo(W * 0.92, oy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, oy + 30); ctx.lineTo(ox, H * 0.16); ctx.stroke();
+    var grow = CV.ease('outCubic', CV.clamp((u - 0.1) / 0.55, 0, 1));
+    ctx.strokeStyle = ACCENT; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (var i = 0; i <= 200; i++) {
+      var px = i / 200, sx = ox + px * (W * 0.68);
+      var sy = oy - Math.sin(px * 6.0 + u * 1.2) * 150 * sc * 1000 * grow * 0.5;
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#dbe7ff';
+    ctx.font = '600 54px ' + MONO;
+    ctx.fillText('f(x) = sin(6x) · e^(-x/2)', ox + 20, H * 0.24);
+    ctx.fillStyle = 'rgba(219,231,255,.6)';
+    ctx.font = '500 34px ' + MONO;
+    ctx.fillText(S.label + '  ·  纯代码绘制', ox + 20, H * 0.32);
+  }
+
+  /* 03 极简发布会 */
+  function drawMinimal(ctx, t, u, S) {
+    bg(ctx, '#ffffff');
+    var p = CV.ease('outQuint', CV.clamp(u / 0.4, 0, 1));
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    var size = fitText(ctx, S.label, W * 0.8, 190);
+    ctx.font = '900 ' + size + 'px ' + CN;
+    ctx.globalAlpha = p;
+    ctx.fillText(S.label, W / 2, H * 0.46 - (1 - p) * 40);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ACCENT; ctx.lineWidth = 4;
+    var lw = W * 0.16 * p;
+    ctx.beginPath(); ctx.moveTo(W / 2 - lw / 2, H * 0.58); ctx.lineTo(W / 2 + lw / 2, H * 0.58); ctx.stroke();
+    ctx.fillStyle = 'rgba(17,17,17,.45)';
+    ctx.font = '400 40px ' + CN;
+    ctx.fillText('CODE  ·  VIDEO  ·  STUDIO', W / 2, H * 0.68);
+    ctx.textAlign = 'left';
+  }
+
+  /* 04 手绘白板 */
+  function drawWhiteboard(ctx, t, u, S) {
+    bg(ctx, '#fdfdfb');
+    var rnd = CV.mulberry32(S.seed);
+    ctx.strokeStyle = '#2b2b2b'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    /* 手绘波浪下划线 */
+    var y0 = H * 0.62, prog = CV.ease('outCubic', CV.clamp(u / 0.5, 0, 1));
+    ctx.beginPath();
+    for (var i = 0; i <= 120; i++) {
+      var px = W * 0.2 + (i / 120) * W * 0.6 * prog;
+      var py = y0 + Math.sin(i * 0.4 + rnd() * 0.4) * 12;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#1b1b1b';
+    ctx.font = '800 120px ' + CN;
+    ctx.textAlign = 'center';
+    ctx.fillText(S.label, W / 2, H * 0.42);
+    ctx.textAlign = 'left';
+    /* 便签 */
+    var notes = ['#ffe27a', '#a8e6a1', '#a9d8ff'];
+    for (var k = 0; k < 3; k++) {
+      var np = CV.clamp((u - 0.25 - k * 0.12) / 0.3, 0, 1);
+      if (np <= 0) continue;
+      ctx.save();
+      ctx.translate(W * (0.12 + k * 0.28), H * 0.74);
+      ctx.rotate((k - 1) * 0.06);
+      ctx.globalAlpha = CV.ease('outBack', np);
+      ctx.fillStyle = notes[k];
+      ctx.fillRect(-110, -60, 220, 120);
+      ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+      ctx.strokeRect(-110, -60, 220, 120);
+      ctx.fillStyle = '#333';
+      ctx.font = '500 30px ' + CN; ctx.textAlign = 'center';
+      ctx.fillText(['逐帧渲染', '代码合成', '零生成模型'][(k + S.no) % 3], 0, 8);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
+  }
+
+  /* 05 赛博故障 */
+  function drawCyber(ctx, t, u, S) {
+    bg(ctx, '#07070c');
+    var scan = (t * 90) % H;
+    ctx.fillStyle = 'rgba(255,255,255,.028)';
+    ctx.fillRect(0, scan, W, 3);
+    var rnd = CV.mulberry32(S.seed + Math.floor(t * 6));
+    var glitch = CV.clamp((u - 0.45) / 0.25, 0, 1);
+    ctx.textAlign = 'center';
+    var size = fitText(ctx, S.label, W * 0.82, 200);
+    ctx.font = '900 ' + size + 'px ' + EN;
+    var base = H * 0.44;
+    if (glitch > 0.02) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,0,80,.75)';
+      ctx.fillText(S.label, W / 2 + 12 * glitch, base);
+      ctx.fillStyle = 'rgba(0,240,255,.75)';
+      ctx.fillText(S.label, W / 2 - 12 * glitch, base);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.fillStyle = '#f0f0ff';
+    ctx.fillText(S.label, W / 2, base);
+    ctx.textAlign = 'left';
+    /* 数据流 */
+    ctx.font = '500 26px ' + MONO;
+    for (var c = 0; c < 16; c++) {
+      var cx = 40 + c * 122, seed = S.seed + c * 37;
+      var ch = String.fromCharCode(33 + Math.floor(rnd() * 90));
+      ctx.fillStyle = 'rgba(0,240,255,' + (0.18 + rnd() * 0.5).toFixed(2) + ')';
+      ctx.fillText(ch, cx, H * 0.74 + (rnd() - 0.5) * 40);
+    }
+    ctx.strokeStyle = ACCENT; ctx.lineWidth = 3;
+    ctx.strokeRect(28, 28, W - 56, H - 56);
+  }
+
+  /* 06 水墨国风 */
+  function drawInk(ctx, t, u, S) {
+    bg(ctx, '#f3ede1');
+    /* 宣纸纤维 */
+    var rnd = CV.mulberry32(S.seed);
+    ctx.fillStyle = 'rgba(120,100,70,.05)';
+    for (var i = 0; i < 260; i++) {
+      ctx.fillRect(rnd() * W, rnd() * H, rnd() * 90 + 20, 1);
+    }
+    /* 墨迹 */
+    var p = CV.ease('outCubic', CV.clamp(u / 0.6, 0, 1));
+    for (var k = 0; k < 5; k++) {
+      var cx = W * (0.2 + k * 0.15), cy = H * (0.34 + 0.06 * Math.sin(k));
+      var rr = 180 * p * (0.6 + rnd() * 0.6);
+      var g = ctx.createRadialGradient(cx, cy, rr * 0.1, cx, cy, rr);
+      g.addColorStop(0, 'rgba(25,22,20,.34)');
+      g.addColorStop(0.6, 'rgba(40,36,32,.12)');
+      g.addColorStop(1, 'rgba(40,36,32,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 6.283); ctx.fill();
+    }
+    /* 竖排书法感标题 */
+    ctx.fillStyle = '#14110e';
+    ctx.font = '700 112px ' + CN;
+    ctx.textAlign = 'center';
+    var chars = S.label.split('');
+    for (var c2 = 0; c2 < chars.length; c2++) {
+      var cp = CV.clamp((u - 0.15 - c2 * 0.08) / 0.3, 0, 1);
+      ctx.globalAlpha = cp;
+      /* 白描边，保证从墨迹里浮出来 */
+      ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(243,237,225,.92)';
+      ctx.lineJoin = 'round';
+      ctx.strokeText(chars[c2], W * 0.5, H * 0.30 + c2 * 118);
+      ctx.fillText(chars[c2], W * 0.5, H * 0.30 + c2 * 118);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = 'rgba(120,40,30,.75)'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(W * 0.40, H * 0.20); ctx.lineTo(W * 0.40, H * 0.78); ctx.stroke();
+    ctx.fillStyle = 'rgba(120,40,30,.85)';
+    ctx.font = '500 34px ' + CN;
+    ctx.fillText('纯代码 · 水墨国风', W * 0.43, H * 0.86);
+  }
+
+  /* 07 数据可视化 */
+  function drawDataViz(ctx, t, u, S) {
+    bg(ctx, '#f7f9fc');
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '700 58px ' + CN;
+    ctx.fillText(S.label, 90, 176);
+    var rnd = CV.mulberry32(S.seed);
+    var baseY = H * 0.82, maxH = H * 0.46;
+    for (var i = 0; i < 7; i++) {
+      var p = CV.ease('outCubic', CV.clamp((u - i * 0.07) / 0.4, 0, 1));
+      var bh = maxH * (0.25 + rnd() * 0.75) * p;
+      var bx = 130 + i * ((W - 320) / 7);
+      var grd = ctx.createLinearGradient(0, baseY - bh, 0, baseY);
+      grd.addColorStop(0, ACCENT); grd.addColorStop(1, 'rgba(217,119,87,.25)');
+      ctx.fillStyle = grd;
+      roundRect(ctx, bx, baseY - bh, 110, bh, 10); ctx.fill();
+      ctx.fillStyle = 'rgba(15,23,42,.4)';
+      ctx.font = '500 26px ' + MONO;
+      ctx.fillText((i + 1) + '月', bx + 22, baseY + 44);
+    }
+    ctx.strokeStyle = 'rgba(15,23,42,.18)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(90, baseY); ctx.lineTo(W - 90, baseY); ctx.stroke();
+    /* 折线 */
+    ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 6; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (var j = 0; j <= 120; j++) {
+      var px = 90 + (j / 120) * (W - 180);
+      var py = baseY - 120 - Math.sin(j * 0.22) * 90 * CV.ease('outCubic', CV.clamp(u / 0.6, 0, 1));
+      if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  /* 08 8-bit 像素 */
+  function drawPixel8(ctx, t, u, S) {
+    bg(ctx, '#1b1b2f');
+    var rnd = CV.mulberry32(S.seed);
+    var pal = ['#ef233c', '#ffb703', '#8ecae6', '#06d6a0', '#d9d9e3'];
+    var cell = 26;
+    for (var gy = 0; gy < H / cell; gy++) {
+      for (var gx = 0; gx < W / cell; gx++) {
+        var r = rnd();
+        if (r < 0.14) {
+          ctx.fillStyle = pal[Math.floor(rnd() * pal.length)];
+          ctx.globalAlpha = 0.35 + rnd() * 0.4;
+          ctx.fillRect(gx * cell, gy * cell, cell, cell);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    /* 像素字 */
+    ctx.textAlign = 'center';
+    var size = fitText(ctx, S.label, W * 0.86, 190);
+    ctx.font = '900 ' + size + 'px ' + EN;
+    var pop = CV.ease('outBack', CV.clamp(u / 0.35, 0, 1));
+    ctx.save();
+    ctx.translate(W / 2, H * 0.46);
+    ctx.scale(pop, pop);
+    ctx.fillStyle = '#f9f6ef';
+    ctx.fillText(S.label, 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left';
+    /* 血条 */
+    ctx.fillStyle = '#ef233c'; ctx.fillRect(W / 2 - 220, H * 0.62, 440 * CV.ease('outCubic', CV.clamp((u - 0.2) / 0.5, 0, 1)), 26);
+    ctx.strokeStyle = '#f9f6ef'; ctx.lineWidth = 4; ctx.strokeRect(W / 2 - 220, H * 0.62, 440, 26);
+    ctx.fillStyle = 'rgba(249,246,239,.65)';
+    ctx.font = '600 30px ' + MONO; ctx.textAlign = 'center';
+    ctx.fillText('PRESS START', W / 2, H * 0.72);
+    ctx.textAlign = 'left';
+  }
+
+  /* 09 代码录屏 */
+  function drawCode(ctx, t, u, S) {
+    bg(ctx, '#0d1117');
+    ctx.fillStyle = '#161b22'; ctx.fillRect(0, 0, W, 74);
+    ctx.fillStyle = '#30363d';
+    for (var d = 0; d < 3; d++) { ctx.beginPath(); ctx.arc(40 + d * 34, 37, 11, 0, 6.283); ctx.fill(); }
+    ctx.fillStyle = '#8b949e'; ctx.font = '500 30px ' + MONO;
+    ctx.fillText('render_frame.py  —  ' + S.label, 160, 48);
+    var lines = [
+      ['def ', '#ff7b72', 'renderFrame', '#d2a8ff', '(t):', '#c9d1d9'],
+      ['    ', '#c9d1d9', 'ctx', '#79c0ff', '.fillStyle', '#c9d1d9', ' = ', '#c9d1d9', "'#07070c'", '#a5d6ff'],
+      ['    ', '#c9d1d9', 'for', '#ff7b72', ' i ', '#c9d1d9', 'in', '#ff7b72', ' range', '#c9d1d9', '(', '#c9d1d9', '360', '#79c0ff', '):', '#c9d1d9'],
+      ['        ', '#c9d1d9', 'draw_pixel', '#d2a8ff', '(i, ', '#c9d1d9', 'seed', '#79c0ff', ')', '#c9d1d9'],
+      ['    ', '#c9d1d9', '# 每帧都是纯函数', '#6e7681'],
+      ['    ', '#c9d1d9', 'return', '#ff7b72', ' ', '#c9d1d9', 'canvas', '#79c0ff'],
+    ];
+    var totalChars = 0, shown = 0;
+    for (var i = 0; i < lines.length; i++) totalChars += lines[i].length;
+    shown = CV.ease('outQuad', CV.clamp(u / 0.75, 0, 1)) * totalChars;
+    var acc = 0, ly = 130;
+    ctx.font = '500 36px ' + MONO;
+    for (var L = 0; L < lines.length; L++) {
+      var segs = lines[L], lineShown = Math.max(0, Math.min(segs.length, shown - acc));
+      var lx = 70;
+      for (var s = 0; s < segs.length; s++) {
+        var chunk = segs[s];
+        var take = Math.max(0, Math.min(chunk.length, lineShown - s));
+        if (take <= 0) break;
+        ctx.fillStyle = chunk.startsWith('#') ? chunk : '#c9d1d9';
+        ctx.fillText(chunk.slice(0, take), lx, ly);
+        lx += ctx.measureText(chunk.slice(0, take)).width;
+      }
+      acc += segs.length;
+      ly += 62;
+    }
+    if (u > 0.75) {
+      var bx = lx + 4, by = ly - 62 - 26;
+      if (Math.floor(t * 2) % 2 === 0) { ctx.fillStyle = ACCENT; ctx.fillRect(bx, by, 20, 38); }
+    }
+  }
+
+  /* 10 Three.js 三维（canvas 伪 3D 立方体） */
+  function drawThree3d(ctx, t, u, S) {
+    bg(ctx, '#04060f');
+    ctx.strokeStyle = 'rgba(90,140,255,.10)';
+    for (var i = 0; i <= 40; i++) {
+      ctx.beginPath(); ctx.moveTo(i * (W / 40), 0); ctx.lineTo(i * (W / 40) - 300, H); ctx.stroke();
+    }
+    var ang = t * 1.1;
+    var cx = W / 2, cy = H / 2, sz = 260;
+    var pts = [];
+    for (var v = 0; v < 8; v++) {
+      var px = (v & 1) ? 1 : -1, py = (v & 2) ? 1 : -1, pz = (v & 4) ? 1 : -1;
+      var X = px * sz, Y = py * sz, Z = pz * sz;
+      var ry = ang, rx = ang * 0.6;
+      var x1 = X * Math.cos(ry) + Z * Math.sin(ry);
+      var z1 = -X * Math.sin(ry) + Z * Math.cos(ry);
+      var y1 = Y * Math.cos(rx) - z1 * Math.sin(rx);
+      var z2 = Y * Math.sin(rx) + z1 * Math.cos(rx);
+      var k = 900 / (900 + z2);
+      pts.push({ x: cx + x1 * k, y: cy + y1 * k, z: z2 });
+    }
+    var edges = [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
+    ctx.lineWidth = 3;
+    for (var e = 0; e < edges.length; e++) {
+      var a = pts[edges[e][0]], b = pts[edges[e][1]];
+      ctx.strokeStyle = 'rgba(120,190,255,' + (0.35 + 0.5 * (1 - (a.z + b.z) / 2000)).toFixed(2) + ')';
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    var glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, 520);
+    glow.addColorStop(0, 'rgba(80,140,255,.22)'); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(220,235,255,.9)';
+    ctx.font = '700 70px ' + CN; ctx.textAlign = 'center';
+    ctx.fillText(S.label, cx, H * 0.86);
+    ctx.textAlign = 'left';
+  }
+
+  /* 11 竖屏短视频 */
+  function drawVertical(ctx, t, u, S) {
+    bg(ctx, '#0a0a0c');
+    var vw = H * 9 / 16, vx = (W - vw) / 2;
+    ctx.fillStyle = '#12121a';
+    roundRect(ctx, vx, 0, vw, H, 0); ctx.fill();
+    var rnd = CV.mulberry32(S.seed);
+    /* 竖版内容：色块 + 大字 + 进度点 */
+    var pal = ['#ff4d6d', '#ffbe0b', '#3a86ff', '#06d6a0'];
+    for (var i = 0; i < 4; i++) {
+      var p = CV.clamp((u - i * 0.1) / 0.3, 0, 1);
+      var yy = H * (0.16 + i * 0.19);
+      ctx.globalAlpha = CV.ease('outBack', p);
+      ctx.fillStyle = pal[(i + S.no) % pal.length];
+      roundRect(ctx, vx + 60, yy, vw - 120, 110, 22); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    var size = fitText(ctx, S.label, vw - 130, 90);
+    ctx.font = '900 ' + size + 'px ' + CN;
+    ctx.fillText(S.label, W / 2, H * 0.10);
+    /* 字幕条 */
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    roundRect(ctx, vx + 40, H * 0.80, vw - 80, 92, 18); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '500 40px ' + CN;
+    ctx.fillText('纯代码 · 逐帧渲染', W / 2, H * 0.855);
+    /* 进度点 */
+    for (var d = 0; d < 4; d++) {
+      ctx.fillStyle = d <= Math.floor(u * 4) % 4 ? ACCENT : 'rgba(255,255,255,.3)';
+      ctx.beginPath(); ctx.arc(W / 2 - 54 + d * 36, H * 0.92, 8, 0, 6.283); ctx.fill();
+    }
+    ctx.textAlign = 'left';
+  }
+
+  var DRAW = {
+    flat: drawFlat, math: drawMath, minimal: drawMinimal, whiteboard: drawWhiteboard,
+    cyber: drawCyber, ink: drawInk, dataviz: drawDataViz, pixel8: drawPixel8,
+    code: drawCode, three3d: drawThree3d, vertical: drawVertical
+  };
+
+  /* ---------------- 大字卡 / 结尾卡 ---------------- */
+  function drawCard(ctx, t, u) {
+    bg(ctx, '#08080c');
+    var p = CV.ease('outQuint', CV.clamp(u / 0.45, 0, 1));
+    ctx.textAlign = 'center';
+    var size = fitText(ctx, TITLE, W * 0.84, 220);
+    ctx.font = '900 ' + size + 'px ' + CN;
+    ctx.fillStyle = '#f7f5f0';
+    ctx.globalAlpha = p;
+    ctx.fillText(TITLE, W / 2, H * 0.44 - (1 - p) * 50);
+    if (SUBTITLE) {
+      ctx.font = '500 58px ' + CN;
+      ctx.fillStyle = 'rgba(247,245,240,.72)';
+      ctx.fillText(SUBTITLE, W / 2, H * 0.44 + 104);
+    }
+    ctx.globalAlpha = 1;
+    var lw = W * 0.2 * p;
+    ctx.strokeStyle = ACCENT; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(W / 2 - lw / 2, H * 0.64); ctx.lineTo(W / 2 + lw / 2, H * 0.64); ctx.stroke();
+    ctx.textAlign = 'left';
+  }
+
+  function drawEnd(ctx, t, u) {
+    bg(ctx, '#08080c');
+    var p = CV.ease('outCubic', CV.clamp(u / 0.5, 0, 1));
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ACCENT;
+    ctx.font = '700 44px ' + CN;
+    ctx.globalAlpha = p;
+    ctx.fillText('CODE  VIDEO  STUDIO', W / 2, H * 0.42);
+    ctx.fillStyle = '#f7f5f0';
+    ctx.font = '800 82px ' + CN;
+    ctx.fillText(TAGLINE || BRAND || '纯代码生成', W / 2, H * 0.54);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
+
+  /* ---------------- 主渲染 ---------------- */
+  window.renderFrame = function (t) {
+    var cv = document.getElementById('cv');
+    if (cv.width !== W) { cv.width = W; cv.height = H; }
+    var ctx = cv.getContext('2d');
+    var at = segAt(t);
+    var s = at.seg;
+    if (s.type === 'card') { drawCard(ctx, t, at.u); return; }
+    if (s.type === 'end') { drawEnd(ctx, t, at.u); return; }
+    var fn = DRAW[s.style] || drawCyber;
+    var S = { no: s.index, label: STYLE_LABEL[s.style] || s.style, seed: SEED + s.index * 977 + s.round * 31 };
+    fn(ctx, t, at.u, S);
+    /* 代码录屏自带标题栏，不再叠风格标签 */
+    if (s.style !== 'code') tag(ctx, S.label, s.index);
+  };
+
+  /* 风格 id → 中文标签（供 UI 与场景共用） */
+  var STYLE_LABEL = {
+    flat: '扁平插画', math: '数学动画', minimal: '极简发布', whiteboard: '手绘白板',
+    cyber: '赛博故障', ink: '水墨国风', dataviz: '数据可视化', pixel8: '像素 8-bit',
+    code: '代码录屏', three3d: '三维立方', vertical: '竖屏短视频'
+  };
+  window.CV_STYLE_LABEL = STYLE_LABEL;
+
+  /* =======================================================================
+   * V1.8.328 宿主适配层 —— 主程序（临智AI 视频版块）通过 postMessage 驱动本页。
+   * 上游原版只有「打开就播」的静态演示；这里补上：
+   *   applyConfig  改标题/副标题/口号/风格集/时长 → 重算时间轴
+   *   play/pause   播放控制
+   *   record       canvas.captureStream + MediaRecorder → WebM 录制
+   *   snapshot     单帧 PNG 导出
+   * 页面本体仍是**纯静态**（双击 studio.html 也能独立跑），宿主是可选增强。
+   * ===================================================================== */
+  var hostState = {
+    playing: false, t0: 0, pausedAt: 0, raf: 0, recording: false
+  };
+
+  function hostCanvas() {
+    var cv = document.getElementById('cv');
+    if (!cv) return null;
+    if (cv.width !== W) { cv.width = W; cv.height = H; }
+    /* V1.8.329：画布 CSS 尺寸按宽高比适配视口 —— 竖屏 1080×1920 时物理高度
+       远超 iframe 视口，不缩放的话用户只能看到画面局部。 */
+    try {
+      var vw = window.innerWidth || W, vh = window.innerHeight || H;
+      var ar = W / H;
+      var dw = Math.min(vw, vh * ar);
+      if (dw > 0) {
+        cv.style.width = Math.round(dw) + 'px';
+        cv.style.height = Math.round(dw / ar) + 'px';
+      }
+    } catch (e) { /* ignore */ }
+    return cv;
+  }
+
+  function hostApplyConfig(cfg) {
+    cfg = cfg || {};
+    var base = window.CV_CONFIG || {};
+    window.CV_CONFIG = {
+      title: cfg.title != null ? cfg.title : (base.title || 'CODE VIDEO'),
+      subtitle: cfg.subtitle != null ? cfg.subtitle : (base.subtitle || ''),
+      tagline: cfg.tagline != null ? cfg.tagline : (base.tagline || ''),
+      brand: cfg.brand != null ? cfg.brand : (base.brand || ''),
+      accent: cfg.accent || base.accent || '#d97757',
+      fps: cfg.fps || base.fps || 30,
+      width: cfg.width || base.width || 960,
+      height: cfg.height || base.height || 540,
+      styles: (cfg.styles && cfg.styles.length) ? cfg.styles : (base.styles || ['cyber']),
+      rounds: cfg.rounds || base.rounds || 1,
+      seed: cfg.seed != null ? cfg.seed : (base.seed || 20261027),
+      cardDuration: cfg.cardDuration || base.cardDuration || 1.2,
+      segDuration: cfg.segDuration || base.segDuration || 3.0,
+      endDuration: cfg.endDuration || base.endDuration || 2.6
+    };
+    // 同步闭包内的变量（绘制函数读的是这些）
+    C = window.CV_CONFIG;
+    TITLE = C.title; SUBTITLE = C.subtitle; TAGLINE = C.tagline; BRAND = C.brand;
+    ACCENT = C.accent; FPS = C.fps; W = C.width; H = C.height;
+    STYLES = C.styles; ROUNDS = C.rounds; SEED = C.seed;
+    build();
+    hostState.pausedAt = 0;
+    hostDraw(0);
+    return { ok: true, duration: window.DURATION };
+  }
+
+  function hostDraw(t) {
+    var cv = hostCanvas();
+    if (!cv) return;
+    var ctx = cv.getContext('2d');
+    var at = segAt(t);
+    var s = at.seg;
+    if (s.type === 'card') { drawCard(ctx, t, at.u); return; }
+    if (s.type === 'end') { drawEnd(ctx, t, at.u); return; }
+    var fn = DRAW[s.style] || drawCyber;
+    var S = { no: s.index, label: STYLE_LABEL[s.style] || s.style, seed: SEED + s.index * 977 + s.round * 31 };
+    fn(ctx, t, at.u, S);
+    if (s.style !== 'code') tag(ctx, S.label, s.index);
+  }
+
+  function hostTick() {
+    if (!hostState.playing) return;
+    var t = (performance.now() - hostState.t0) / 1000;
+    if (t >= window.DURATION) {
+      hostState.pausedAt = window.DURATION;
+      hostDraw(window.DURATION);
+      hostState.playing = false;
+      hostNotify({ type: 'cdv-ended' });
+      return;
+    }
+    hostDraw(t);
+    hostState.raf = requestAnimationFrame(hostTick);
+  }
+
+  function hostPlay() {
+    if (hostState.playing) return;
+    var cv = hostCanvas();
+    if (!cv) return;
+    if (hostState.pausedAt >= window.DURATION) hostState.pausedAt = 0;
+    hostState.t0 = performance.now() - hostState.pausedAt * 1000;
+    hostState.playing = true;
+    hostState.raf = requestAnimationFrame(hostTick);
+    hostNotify({ type: 'cdv-playing', playing: true });
+  }
+
+  function hostPause() {
+    if (!hostState.playing) return;
+    hostState.pausedAt = (performance.now() - hostState.t0) / 1000;
+    hostState.playing = false;
+    if (hostState.raf) cancelAnimationFrame(hostState.raf);
+    hostNotify({ type: 'cdv-playing', playing: false });
+  }
+
+  function hostNotify(msg) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(Object.assign({ source: 'codevideo' }, msg), '*');
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function hostSnapshot() {
+    var cv = hostCanvas();
+    if (!cv) return { ok: false, error: '画布未就绪' };
+    try {
+      var url = cv.toDataURL('image/png');
+      hostDownload(url, 'codevideo-frame.png');
+      hostNotify({ type: 'cdv-snapshot', ok: true });
+      return { ok: true };
+    } catch (e) {
+      hostNotify({ type: 'cdv-snapshot', ok: false, error: String(e) });
+      return { ok: false, error: String(e) };
+    }
+  }
+
+  function hostDownload(url, name) {
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+
+  /* 录制：canvas.captureStream(fps) + MediaRecorder → WebM
+     V1.8.329：noDownload=true 时不自动下载，Blob 挂 window.CV_LAST_RECORD_BLOB
+     交给宿主（同源 iframe，宿主直接读）上传服务端混音出 MP4。 */
+  function hostRecord(noDownload) {
+    var cv = hostCanvas();
+    if (!cv) return { ok: false, error: '画布未就绪' };
+    if (hostState.recording) return { ok: false, error: '正在录制中' };
+    if (typeof MediaRecorder === 'undefined' || !cv.captureStream) {
+      var err = '当前浏览器不支持画布录制（MediaRecorder / captureStream 不可用）';
+      hostNotify({ type: 'cdv-record', ok: false, error: err });
+      return { ok: false, error: err };
+    }
+    try {
+      var stream = cv.captureStream(FPS || 30);
+      var mime = 'video/webm;codecs=vp9';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8';
+      if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+      var chunks = [];
+      var rec = new MediaRecorder(stream, { mimeType: mime });
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      rec.onstop = function () {
+        hostState.recording = false;
+        var blob = new Blob(chunks, { type: 'video/webm' });
+        /* V1.8.329：录制产物 Blob 交接给宿主（同源零拷贝），供服务端混音出 MP4 */
+        try { window.CV_LAST_RECORD_BLOB = blob; } catch (e) { /* ignore */ }
+        if (!noDownload) {
+          var url = URL.createObjectURL(blob);
+          hostDownload(url, 'codevideo.webm');
+          setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        }
+        hostNotify({ type: 'cdv-record', ok: true, size: blob.size, mime: mime });
+      };
+      rec.start(100);
+      hostState.recording = true;
+      hostState.recorder = rec;
+      hostNotify({ type: 'cdv-record-start' });
+      return { ok: true };
+    } catch (e) {
+      hostState.recording = false;
+      hostNotify({ type: 'cdv-record', ok: false, error: String(e) });
+      return { ok: false, error: String(e) };
+    }
+  }
+
+  function hostRecordStop() {
+    if (!hostState.recording || !hostState.recorder) return { ok: false, error: '没有正在进行的录制' };
+    try { hostState.recorder.stop(); } catch (e) { /* ignore */ }
+    return { ok: true };
+  }
+
+  /* 宿主 API */
+  window.CV_HOST_API = {
+    applyConfig: hostApplyConfig,
+    play: hostPlay,
+    pause: hostPause,
+    record: hostRecord,
+    recordStop: hostRecordStop,
+    snapshot: hostSnapshot,
+    getDuration: function () { return window.DURATION; },
+    isPlaying: function () { return hostState.playing; }
+  };
+
+  /* 接收宿主消息 */
+  window.addEventListener('message', function (ev) {
+    var d = ev.data || {};
+    if (d.source !== 'agnes-host' || !d.type) return;
+    try {
+      if (d.type === 'cdv-config') {
+        var r = hostApplyConfig(d.config || {});
+        hostNotify({ type: 'cdv-ready', duration: r.duration });
+        if (d.autoplay !== false) hostPlay();
+      } else if (d.type === 'cdv-play') {
+        hostPlay();
+      } else if (d.type === 'cdv-pause') {
+        hostPause();
+      } else if (d.type === 'cdv-record') {
+        hostRecord(!!d.noDownload);
+      } else if (d.type === 'cdv-record-stop') {
+        hostRecordStop();
+      } else if (d.type === 'cdv-snapshot') {
+        hostSnapshot();
+      }
+    } catch (e) {
+      hostNotify({ type: 'cdv-error', error: String(e) });
+    }
+  });
+
+  /* V1.8.332：主动握手。
+     旧协议是「宿主等 cdv-ready 才发配置 / 引擎收到配置才发 cdv-ready」——两边互等 = 死锁，
+     宿主永远停在「渲染引擎还没就绪，稍等一下再试」。现在引擎就绪先开口，宿主再下发配置。 */
+  if (window.parent !== window) {
+    try {
+      hostNotify({ type: 'cdv-ready', duration: window.DURATION });
+    } catch (e) { /* ignore */ }
+  }
+
+  /* 独立打开（无宿主）时自动播一次 —— 保持上游原行为 */
+  if (window.parent === window) {
+    hostDraw(0);
+    hostPlay();
+  }
+})();
+</script>
+</body>
+</html>

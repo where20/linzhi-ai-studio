@@ -1,0 +1,1228 @@
+/* ============================================================
+   临智AI · AI 生图工作台主页样式（浅色主题）
+   ============================================================ */
+:root {
+  --bg: #23272d;
+  --surface: #2f343c;
+  --border: #3a414a;
+  --text: #f2f4f7;
+  --text-secondary: #aab3bf;
+  --primary: #e8ecf1;
+  --primary-hover: #cbd3dd;
+  --primary-soft: #3a4048;
+  --danger: #ff6b6b;
+  --success: #5dd98a;
+  --radius: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.5);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ===== 顶部导航 ===== */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+}
+.brand__logo {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--primary), #9aa4b2);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 18px;
+}
+.brand__name { font-weight: 700; font-size: 16px; }
+.brand__sub { font-size: 12px; color: var(--text-secondary); }
+.topnav {
+  display: flex;
+  gap: 4px;
+}
+.topnav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+.topnav a:hover { background: var(--primary-soft); color: var(--primary); }
+.topnav a.active { background: var(--primary-soft); color: var(--primary); }
+
+/* ===== 主布局 ===== */
+.main { max-width: 1200px; margin: 0 auto; padding: 14px 14px 44px; }
+.layout { display: flex; flex-direction: column; gap: 14px; }
+
+/* ===== 一行两格：人象 + 提示词 / AI 推演 + 模型选择（锁死两列，任何宽度都不分行） ===== */
+.row-split {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+.row-split--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.row-split + .row-split { margin-top: 14px; }
+.row-split .panel {
+  height: 100%;
+  margin: 0;
+}
+/* 模型选择搬进第二行后，推演面板只有半屏宽，输入区与结果区改为上下堆叠 */
+.row-split--deduce .deduce-body { grid-template-columns: minmax(0, 1fr); }
+
+/* 两格后每格更宽了：空态上传框别再固定 260，直接铺满格子 */
+.row-split--2 .upload { max-width: none; }
+
+/* 手机端也锁死两格并排（不分行）。格子只有 ~178px，所以把标题区与工具按钮压缩一档，
+   避免按钮竖排、下拉文字被挤没。 */
+@media (max-width: 620px) {
+  .row-split,
+  .row-split--2 { gap: 10px; }
+  .panel__head { gap: 6px; margin-bottom: 8px !important; }
+  .panel__head h2 { font-size: 13px !important; }
+  .step { width: 18px; height: 18px; font-size: 10px !important; }
+  .prompt-tools { flex-wrap: nowrap; gap: 4px; }
+  .prompt-tools .btn {
+    padding: 3px 6px !important;
+    font-size: 10.5px !important;
+    line-height: 1.5 !important;
+    white-space: nowrap;          /* 不加会被挤成「AI 优 / 化」竖排 */
+  }
+  .prompt-meta { flex-wrap: wrap; gap: 2px 8px; }
+  .prompt-meta > span { white-space: nowrap; }
+  .hint, .atlas-col__tip { font-size: 10.5px !important; }
+  /* 推演面板半屏宽时，三个按钮一行放不下，允许折行 */
+  .deduce-btns { gap: 6px; }
+  .deduce-btns .btn { padding: 4px 8px !important; font-size: 11px !important; }
+}
+
+/* ===== 模型选择面板 ===== */
+.model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.model-picker .field { margin-bottom: 10px; }
+.model-hint {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.model-hint a { color: var(--primary); text-decoration: none; }
+.model-hint a:hover { text-decoration: underline; }
+
+/* ===== AI 推演面板 ===== */
+.panel--deduce { margin-top: 14px; }
+.deduce-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .deduce-body { grid-template-columns: 1fr; }
+}
+.deduce-input textarea {
+  width: 100%;
+  min-height: 62px;
+  font-size: 13.5px;
+}
+.deduce-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.deduce-result {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.05);
+}
+.deduce-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.deduce-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+}
+.deduce-tag__label { color: var(--text-secondary); font-size: 11px; }
+.deduce-tag__value { color: var(--text); font-weight: 600; }
+.deduce-why {
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+.deduce-why b { color: var(--text); }
+
+/* ===== 面板通用 ===== */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.panel__head h2 {
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+.hint { font-size: 12px; color: var(--text-secondary); }
+
+/* ===== 提示词 ===== */
+.prompt-tools { display: flex; gap: 6px; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn--ghost { background: transparent; }
+.btn--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.btn--primary:hover { background: var(--primary-hover); color: #fff; }
+.btn--danger { border-color: var(--danger); color: var(--danger); }
+.btn--danger:hover { background: #fef2f2; }
+.btn--lg { padding: 12px 28px; font-size: 15px; border-radius: 12px; }
+.btn--sm { padding: 4px 9px; font-size: 11.5px; }
+.btn__icon { font-size: 16px; }
+
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 84px;
+  background: #fbfcfe;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  background: #fff;
+}
+.prompt-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ===== 提示词输入窗：铺到面板边缘（左右贴边，向下撑到底边） =====
+   glass.css 里 .panel / textarea 的 padding、border、radius 全都带 !important，
+   这里必须用「两个类」+ !important 才压得住。 */
+.panel.panel--prompt {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 0 0 !important;   /* 左右/下内边距清零，交给输入框自己贴边 */
+}
+.panel--prompt .panel__head {
+  padding: 0 16px 8px;
+  margin-bottom: 0 !important;    /* glass.css 强制 12px，这里收掉贴紧输入框 */
+}
+.panel--prompt #promptInput {
+  flex: 1 1 auto;                 /* 吃掉剩余高度 → 输入框一直延展到面板底部 */
+  width: 100%;
+  min-height: 84px;
+  padding: 12px 16px !important;  /* 文字仍留呼吸位，边框贴边 */
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;       /* 上方已有 .panel__head 的分隔线 */
+  border-radius: 0 !important;
+  resize: none;                   /* 拖拽手柄会破坏贴边，关掉 */
+}
+.panel--prompt .prompt-meta {
+  padding: 0 16px;
+  margin: 8px 0 12px;
+}
+.panel--prompt .ai-panel {
+  margin: 0 16px 14px;
+}
+
+/* ===== AI 优化结果面板 ===== */
+.ai-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+}
+.ai-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ai-panel__btns { display: flex; gap: 6px; }
+.ai-panel textarea {
+  width: 100%;
+  min-height: 70px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: rgba(0,0,0,.18);
+  color: var(--text);
+}
+.ai-panel textarea[readonly] { opacity: .92; }
+
+/* ===== 收集页：AI 资产管理 ===== */
+.ai-manage {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 10px;
+}
+.ai-manage__result {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.ai-manage__result dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+}
+.ai-manage__result dt { color: var(--text-secondary); }
+.ai-manage__result dd { margin: 0; color: var(--text); }
+.ai-manage__result .ai-pills { margin-top: 6px; display: flex; gap: 5px; flex-wrap: wrap; }
+.ai-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--primary-soft);
+  color: var(--text);
+}
+
+/* ===== 平铺筛选标签组（系列 / 分类 / 品类）===== */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px !important;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px !important;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+  user-select: none;
+}
+.chip:hover { border-color: var(--primary); color: var(--text); }
+.chip > span { font-size: 12px !important; }
+.chip em {
+  font-style: normal;
+  font-size: 10.5px !important;
+  font-variant-numeric: tabular-nums;
+  opacity: .65;
+}
+.chip[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #1f2328;
+  font-weight: 600;
+}
+.chip[aria-pressed="true"] em { opacity: .7; }
+.chip--all { font-weight: 600; }
+
+/* 无资产的分类：灰显（表示该分类下没有任何内容） */
+.chip--empty {
+  color: #6b7280;
+  opacity: .55;
+  border-style: dashed;
+  background: transparent;
+}
+.chip--empty em { opacity: .5; }
+.chip--empty:hover {
+  color: #8b929c;
+  border-color: var(--border);
+  background: transparent;
+}
+.chip--empty[aria-pressed="true"] {
+  background: rgba(255,255,255,.14);
+  border-color: rgba(255,255,255,.3);
+  border-style: solid;
+  color: #cfd4dc;
+}
+.chip--empty[aria-pressed="true"] em { opacity: .6; }
+
+/* ===== 图鉴选择（2×2：上排姿鉴/衣鉴两格选择，下排两格预览平分） ===== */
+.atlas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.atlas-col--split {
+  display: grid;
+  /* 左参数 + 右预览 始终并排同行：任何窗口宽度都不换行，故不设单列断点。
+     右侧封顶 340px，窄屏时按 50% 收缩，保证左侧参数区不被压成 0 */
+  grid-template-columns: minmax(0, 1fr) min(340px, 50%);
+  gap: 18px;
+  align-items: start;
+}
+/* 姿鉴 / 衣鉴 两列只负责选择项，不再内嵌预览 */
+.atlas-col--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.atlas-col--stack .atlas-picks { width: 100%; }
+.atlas-col--stack .field { margin-bottom: 14px; }
+/* 预览行：跨满两列，内部再分两格平分，姿鉴预览在左、衣鉴预览在右 */
+.atlas-previews {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.atlas-previews .preview {
+  width: 100%;
+  max-width: 420px;
+  height: 380px;          /* 两格等高：不用 aspect-ratio，避免 3:4 与 2:3 高度不齐 */
+  max-height: 380px;
+  aspect-ratio: auto;
+  margin: 0 auto;
+}
+/* 角度胶囊：与左侧姿势列表同格并排，改为竖排胶囊列，随框高居中 */
+.atlas-col--stack .chip-group--angles {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 120px;
+  flex: 1 1 auto;
+  padding: 3px;
+}
+.atlas-col--stack .chip-group--angles .chip {
+  width: 100%;
+  justify-content: center;
+}
+.atlas-col h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+.atlas-col__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.atlas-col__tip {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.atlas-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.field { margin-bottom: 10px; }
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.field select,
+.field input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: #fbfcfe;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field select:focus,
+.field input:focus { border-color: var(--primary); }
+
+/* 姿势 / 色系 / 服装 三个选择窗：现在各自独占两格中的一格，铺满本格即可 */
+#poseSelect,
+#costumeColor,
+#costumeSelect {
+  width: 100% !important;
+}
+
+/* 姿势 + 角度：并排两格（平面布局，不再上下堆叠） */
+.pose-pair,
+.costume-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.costume-pair { align-items: stretch; }
+.pose-pair { align-items: stretch; }
+/* 两格后行距由 grid gap 控制，避免与 .field 的 margin 叠加 */
+.atlas-col--stack .pose-pair > .field,
+.atlas-col--stack .costume-pair > .field { margin-bottom: 0; }
+/* 两格标签强制单行，避免窄屏「服装（编号）」换行把下拉顶下去 */
+.costume-pair .field label,
+.pose-pair .field label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 姿势 + 角度：两格等高。姿势是列表窗，角度是胶囊，用 flex 拉齐上下边 */
+.pose-pair .field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pose-pair .field > label { flex: 0 0 auto; }
+.pose-pair #poseSelect { flex: 1 1 auto; }
+
+/* 角度胶囊：装进与左侧列表同款的框里，竖排，随框高居中 */
+.chip-group--angles {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 120px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #2c3138;          /* 与 #poseSelect 同色，避免深色页面里出现白框 */
+}
+.chip-group--angles .chip {
+  width: 100%;
+  justify-content: center;
+  padding: 5px 8px;
+}
+.field select[multiple] {
+  background: #fbfcfe;
+}
+.field select[size] { padding: 3px; }
+.field select[size] option {
+  padding: 4px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.field select[size] option:checked {
+  background: var(--primary);
+  color: #fff;
+}
+.input-readonly {
+  background: #f1f5f9 !important;
+  color: var(--text-secondary) !important;
+  cursor: not-allowed;
+}
+.field--check {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.check input {
+  width: 15px; height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* ===== 大图预览（右栏，固定与提示词/人像列同宽） ===== */
+.preview {
+  width: 100%;
+  max-width: 340px;      /* 与上方「人像 / 提示词」列宽一致，不再撑满半屏 */
+  max-height: 460px;
+  min-height: 0;
+  justify-self: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #1f232a;   /* 深色底：替换原先刺眼的白 */
+  overflow: hidden;
+  position: relative;
+  animation: pvBorder 5.5s ease-in-out infinite;
+}
+.preview--pose { aspect-ratio: 3 / 4; }
+.preview--costume { aspect-ratio: 2 / 3; }
+
+/* 动态网格：缓慢漂移，让空窗口不再是一块死白 */
+.preview::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 26px 26px;
+  animation: pvGrid 20s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+/* 冷色光晕：呼吸式明暗 */
+.preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(62% 58% at 50% 42%, rgba(122, 196, 255, 0.20), transparent 62%),
+    radial-gradient(52% 52% at 82% 88%, rgba(110, 245, 210, 0.10), transparent 60%);
+  animation: pvGlow 6.5s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+.preview img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  padding: 8px;
+  z-index: 1;            /* 有图时盖住动态背景 */
+}
+/* 未选图时必须真正隐藏，否则 display:block 会盖过 hidden，露出破图图标 + alt 文字 */
+.preview img[hidden] { display: none !important; }
+.preview__empty {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  color: rgba(232, 236, 241, 0.74);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+.preview__empty::before {
+  font-size: 30px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(122, 196, 255, 0.5));
+  animation: pvFloat 4.2s ease-in-out infinite;
+}
+/* 🔴 V1.8.392：选中后必须真的藏起来。
+   上面给了 display:flex，作者样式优先级高于 UA 的 [hidden]{display:none}，
+   于是 JS 里 empty.hidden = true 完全无效 —— 姿势/服装已经选中、预览图也出来了，
+   「未选择姿势 / 未选择服装」还压在图上（用户原话「选完还显示未选择」）。 */
+.preview__empty[hidden] { display: none !important; }
+.preview--pose .preview__empty::before { content: '🧍'; }
+.preview--costume .preview__empty::before { content: '👚'; }
+
+@keyframes pvGrid {
+  from { transform: translate(0, 0); }
+  to   { transform: translate(26px, 26px); }
+}
+@keyframes pvGlow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.07); }
+}
+@keyframes pvFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+@keyframes pvBorder {
+  0%, 100% { border-color: rgba(255, 255, 255, 0.10); box-shadow: inset 0 0 0 rgba(122, 196, 255, 0); }
+  50%      { border-color: rgba(122, 196, 255, 0.30); box-shadow: inset 0 0 26px rgba(122, 196, 255, 0.10); }
+}
+/* 尊重系统「减弱动态效果」 */
+@media (prefers-reduced-motion: reduce) {
+  .preview,
+  .preview::before,
+  .preview::after,
+  .preview__empty::before { animation: none !important; }
+}
+
+/* 三图合一约束提示条 */
+.atlas-warn {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.32);
+  color: #b42318;
+  font-size: 12.5px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.atlas-warn::before {
+  content: '⚠️ ';
+}
+
+/* ===== 模型参数 ===== */
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.badge--model {
+  background: linear-gradient(135deg, #9aa4b2, #e8ecf1);
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+.seg button {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.seg button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ===== API Key 输入行 ===== */
+.key-input-wrap {
+  display: flex;
+  gap: 6px;
+}
+/* Key 明文输入框：等宽字体，长 Key 一眼能核对 */
+.key-input-wrap input,
+.key-input-wrap input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: .3px;
+}
+.key-input-wrap .btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* ===== 上传人像 ===== */
+.portrait-body { display: flex; gap: 14px; align-items: flex-start; flex-wrap: nowrap; }
+.upload {
+  width: 100%;
+  max-width: 260px;
+  min-height: 120px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  background: #fafbfc;
+  transition: all 0.15s;
+  text-align: center;
+  padding: 12px;
+}
+.upload:hover { border-color: var(--primary); background: var(--primary-soft); }
+.upload.dragover { border-color: var(--primary); background: var(--primary-soft); }
+.upload__icon { font-size: 24px; }
+.upload__text { font-size: 13px; font-weight: 600; color: var(--text); }
+.upload__hint { font-size: 11.5px; color: var(--text-secondary); }
+.portrait-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+/* 未上传时必须真正隐藏（display:flex 会盖过 hidden 属性） */
+.portrait-preview[hidden] { display: none !important; }
+.portrait-preview img {
+  max-width: 160px;
+  max-height: 200px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: contain;
+}
+
+/* ===== 上传人像窗口：动态背景（与预览窗同款质感） ===== */
+.upload {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: #1f232a;
+  border-color: rgba(255, 255, 255, 0.18);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.upload::before {           /* 漂移网格 */
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+  animation: pvGrid 18s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+.upload::after {            /* 冷色呼吸光晕 */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 60% at 50% 40%, rgba(122, 196, 255, 0.18), transparent 62%),
+    radial-gradient(50% 50% at 85% 90%, rgba(110, 245, 210, 0.10), transparent 60%);
+  animation: pvGlow 6s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+.upload > span { position: relative; z-index: 1; }
+.upload__icon {
+  animation: pvFloat 4.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(122, 196, 255, 0.45));
+}
+.upload:hover,
+.upload.dragover {          /* 悬停 / 拖拽经过：边框与光晕加强 */
+  border-color: rgba(122, 196, 255, 0.55);
+  background: #222834;
+  box-shadow: 0 0 24px rgba(122, 196, 255, 0.20), inset 0 0 30px rgba(122, 196, 255, 0.09);
+}
+@media (prefers-reduced-motion: reduce) {
+  .upload::before,
+  .upload::after,
+  .upload__icon { animation: none !important; }
+}
+
+/* ===== 上传成功后：上传窗口缩成右上角小方块，把正位让给大图预览 ===== */
+.portrait-body.has-portrait .upload {
+  order: 2;                      /* 排到预览右侧 */
+  margin-left: auto;             /* 贴住右边界 → 视觉落在右上角 */
+  flex: 0 0 auto;
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  height: 60px;
+  min-height: 60px;
+  padding: 0;
+  gap: 0;
+  border-width: 1px;
+  border-radius: 10px;
+  animation: uFold 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.1);
+}
+.portrait-body.has-portrait .upload__icon {
+  font-size: 19px;
+  animation: none;                /* 小方块里不再浮动，避免抖动 */
+}
+/* 缩小后文案只留「换图」，原长文案用 font-size:0 收起 */
+.portrait-body.has-portrait .upload__text {
+  font-size: 0;
+  line-height: 0;
+  margin-top: 3px;
+}
+.portrait-body.has-portrait .upload__text::after {
+  content: '换图';
+  font-size: 10px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.portrait-body.has-portrait .upload__hint { display: none; }
+
+.portrait-body.has-portrait .portrait-preview {
+  order: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+}
+.portrait-body.has-portrait .portrait-preview img {
+  max-width: 100%;
+  max-height: 380px;   /* 人象面板改成整行一半宽后，图片可以放大一些 */
+}
+
+@keyframes uFold {
+  from { transform: scale(1.6); opacity: 0.2; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+/* 窄屏（三列被压得很薄）时，右上角方块同步缩小，避免把大图挤没 */
+@media (max-width: 760px) {
+  .portrait-body { gap: 8px; }
+  .portrait-body.has-portrait .upload {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+  .portrait-body.has-portrait .upload__icon { font-size: 14px; }
+  .portrait-body.has-portrait .upload__text { margin-top: 1px; }
+  .portrait-body.has-portrait .upload__text::after { font-size: 8.5px; }
+}
+
+/* ===== 生成按钮（整条百分比进度条） + 状态 ===== */
+.panel--action {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.status { font-size: 13px; color: var(--text-secondary); text-align: center; }
+.status.loading { color: var(--primary); font-weight: 600; }
+.status.error { color: var(--danger); }
+.status.success { color: var(--success); }
+
+/* 整条进度按钮：轨道浅翠，填充从浅翠一路渐变到深蓝 */
+.btn--progress {
+  position: relative;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1px solid rgba(20, 120, 110, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(90deg, #eafaf4 0%, #eef4fb 100%);
+  overflow: hidden;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #073b4e;
+  cursor: pointer;
+  isolation: isolate;
+}
+/* 动态背景：漂移网格 + 冷光呼吸（与人像上传窗口同款质感） */
+.btn--progress::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 20px 20px;
+  animation: pvGrid 18s linear infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+.btn--progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(50% 140% at 15% 50%, rgba(79, 216, 182, 0.20), transparent 62%),
+    radial-gradient(50% 140% at 85% 50%, rgba(47, 166, 216, 0.20), transparent 62%);
+  animation: pvGlow 6s ease-in-out infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+.btn--progress:hover {
+  background: linear-gradient(90deg, #e2f8f0 0%, #e8f1fb 100%);
+  color: #073b4e;
+  border-color: rgba(20, 120, 110, 0.34);
+}
+.btn--progress .gen-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  background: linear-gradient(90deg,
+      #a8f3df 0%, #4fd8b6 28%, #2fa6d8 62%, #1b5bb8 84%, #0b2f74 100%);
+  transition: width 0.32s cubic-bezier(0.4, 0.1, 0.2, 1);
+  z-index: 1;            /* 填充层在网格/光晕之下，纹理始终可见 */
+}
+.btn--progress .gen-label {
+  position: relative;
+  z-index: 3;            /* 文字压在网格/光晕/填充之上 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  transition: color 0.2s;
+  text-align: center;
+}
+/* 进度越过文字区后，文字转白，保证在深蓝上依然清晰 */
+.btn--progress.is-deep .gen-label {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(3, 25, 60, 0.35);
+}
+.btn--progress.is-fail .gen-bar {
+  background: linear-gradient(90deg, #fca5a5 0%, #ef4444 100%);
+}
+/* 生成中按钮保持不透明（默认 .btn:disabled 会降到 0.6，进度条会发灰） */
+.btn.btn--progress:disabled {
+  opacity: 1;
+  cursor: progress;
+  pointer-events: none;
+}
+
+/* ===== 结果 ===== */
+.result-tools { display: flex; gap: 6px; }
+.result-body {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 860px) { .result-body { grid-template-columns: 1fr; } }
+.result-image-wrap {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  place-items: center;
+}
+.result-image {
+  max-width: 100%;
+  max-height: 520px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+.result-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  word-break: break-all;
+}
+.result-meta b { color: var(--text); }
+
+/* ===== 底部 ===== */
+.footer {
+  text-align: center;
+  padding: 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.footer code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* ===== 按钮禁用 ===== */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ============================================================
+   收集时装 / 通用组件（卡片、表单、拖拽区）
+   ============================================================ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+.card-header {
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.card-header .icon { font-size: 16px; }
+
+.form-group { margin-bottom: 12px; }
+.form-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+.form-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.form-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 70px;
+  background: #fbfcfe;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  background: #fff;
+}
+.form-select, .form-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fbfcfe;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-select:focus, .form-input:focus { border-color: var(--primary); }
+
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 22px 14px;
+  text-align: center;
+  cursor: pointer;
+  background: #fafbfc;
+  transition: all 0.15s;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.drop-zone-icon { font-size: 34px; }
+.drop-zone-text { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 6px; }
+.drop-zone-hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+/* 尺寸旁的小提示：说明「尺寸随模型自动匹配」 */
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-soft, #8a93a6);
+  line-height: 1.4;
+}

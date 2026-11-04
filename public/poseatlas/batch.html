@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>批量收集 · 临智AI</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/home.css?v=1.8.394">
+<link rel="stylesheet" href="assets/css/glass.css?v=1.8.394">
+<style>
+  .batch-main { max-width: var(--page-max); margin: 0 auto; padding: 14px 16px 56px; }
+
+  .batch-hero {
+    text-align: center;
+    padding: 16px 16px 8px;
+  }
+  .batch-hero h1 { font-size: 20px; font-weight: 800; margin: 6px 0 4px; }
+  .batch-hero p { color: var(--text-secondary); font-size: 13px; max-width: 640px; margin: 0 auto; }
+
+  /* ===== 上传区 ===== */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 30px 18px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--surface);
+    transition: all .15s;
+    margin-bottom: 14px;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .drop-zone__icon { font-size: 34px; }
+  .drop-zone__title { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 8px; }
+  .drop-zone__hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* ===== 参数行 ===== */
+  .batch-params {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* ===== 操作条 ===== */
+  .batch-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .batch-actions .btn { padding: 10px 18px; font-size: 14px; }
+  .batch-actions .btn--primary { padding: 10px 24px; }
+
+  /* ===== 进度条 ===== */
+  .progress {
+    height: 8px;
+    border-radius: 99px;
+    background: rgba(255,255,255,.08);
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .progress__bar {
+    height: 100%;
+    width: 0;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #e8ecf1, #9aa4b2);
+    transition: width .35s ease;
+  }
+  .progress-text { font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; }
+
+  /* ===== 队列网格 ===== */
+  .queue-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .q-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+  .q-card__media {
+    position: relative;
+    aspect-ratio: 3/4;
+    background: #1d2127;
+    overflow: hidden;
+  }
+  .q-card__media img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .q-card__nothumb {
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    background: rgba(255,255,255,.04);
+  }
+  .q-card__status {
+    position: absolute;
+    left: 6px; top: 6px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 700;
+    backdrop-filter: blur(6px);
+    background: rgba(20,24,30,.82);
+    color: #cfd4dc;
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  .q-card__status.is-done { color: #0f1a12; background: #7ddba4; border-color: #7ddba4; }
+  .q-card__status.is-processing { color: #1b1d21; background: #e8ecf1; border-color: #e8ecf1; }
+  .q-card__status.is-failed { color: #fff; background: #d9534f; border-color: #d9534f; }
+  .q-card__status.is-pending { color: #cfd4dc; }
+  .q-card__body { padding: 7px 9px; display: flex; flex-direction: column; gap: 5px; }
+  .q-card__name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .q-card__meta { font-size: 10.5px; color: var(--text-secondary); }
+  .q-card__err { font-size: 10.5px; color: #ff8f8f; word-break: break-all; }
+  .q-card__btns { display: flex; gap: 5px; flex-wrap: wrap; }
+  .q-card__btns .btn { padding: 4px 9px; font-size: 11px; }
+  .q-card__done {
+    position: absolute;
+    inset: 0;
+    background: rgba(16,20,26,.72);
+    display: grid;
+    place-items: center;
+    padding: 8px;
+  }
+  .q-card__done img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+
+  .empty-note {
+    padding: 34px 14px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+  }
+  .lock-note {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+</style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="index.html">
+        <span class="brand__logo">🧭</span>
+        <span class="brand__name">临智AI</span>
+      </a>
+      <nav class="topnav">
+      <a href="index.html"><span class="nav-ico">🏠</span> 首页</a>
+      <a href="home.html"><span class="nav-ico">🎨</span> 试装</a>
+      <a href="collect.html"><span class="nav-ico">👗</span> 收集</a>
+      <a href="batch.html" class="active"><span class="nav-ico">📦</span> 批量</a>
+      <a href="pose.html"><span class="nav-ico">🧍</span> 姿鉴</a>
+      <a href="costume.html"><span class="nav-ico">👚</span> 衣鉴</a>
+      <a href="settings.html"><span class="nav-ico">⚙</span> 设置</a>
+      </nav>
+    </div>
+  </header>
+
+<section class="batch-hero">
+  <h1>批量收集时装</h1>
+  <p>一次最多 20 张图进入队列，后台自动逐张「去人留衣」。原图永久保存进姿势图鉴「自建」系列，成图可一键收集进衣装图鉴。</p>
+</section>
+
+<main class="batch-main">
+
+  <!-- 上传区 -->
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-zone__icon">📥</div>
+    <div class="drop-zone__title">点击这里选择图片</div>
+    <div class="drop-zone__hint">可反复点击累积多张 · 单次最多 20 张 · JPG / PNG / WEBP · 自动压缩为 WebP 后入库</div>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden onchange="handleFile(this)">
+  </div>
+
+  <!-- 参数 -->
+  <div class="batch-params">
+    <div class="field">
+      <label for="strength">重绘幅度</label>
+      <select id="strength">
+        <option value="0.35" selected>0.35（推荐，保留版型）</option>
+        <option value="0.40">0.40</option>
+        <option value="0.45">0.45</option>
+        <option value="0.50">0.50（改动最大）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="size">输出尺寸</label>
+      <select id="size" disabled>
+        <option value="1536x2720" selected>1536 × 2720（9:16 竖版）</option>
+      </select>
+      <div class="hint" style="margin-top:4px;">🔒 已锁定 9:16 竖版（1536 × 2720）</div>
+    </div>
+    <div class="field">
+      <label for="desc">统一描述（可选）</label>
+      <input id="desc" type="text" placeholder="例如：墨绿色丝绒连衣裙">
+    </div>
+  </div>
+
+  <div class="lock-note">
+    <span>🔒</span>
+    <span>上传的<strong>原图会永久保存</strong>进姿势图鉴「自建」系列（压缩为 WebP 存于程序内），<strong>不提供删除入口</strong>，任何时候都不会被当作可清理的资产移除。</span>
+  </div>
+
+  <!-- 操作 -->
+  <div class="batch-actions">
+    <button type="button" class="btn btn--primary" id="btnUpload">⬆ 选择图片并上传</button>
+    <button type="button" class="btn" id="btnStart" disabled>▶ 继续处理剩余</button>
+    <button type="button" class="btn" id="btnRetryAll" disabled>↻ 重试全部失败</button>
+    <button type="button" class="btn" id="btnClear" disabled>🗑 清空队列</button>
+    <span class="status" id="status" role="status" aria-live="polite"></span>
+  </div>
+
+  <!-- 进度 -->
+  <div class="progress"><div class="progress__bar" id="progressBar"></div></div>
+  <div class="progress-text" id="progressText">尚未开始</div>
+
+  <!-- 队列 -->
+  <div class="queue-grid" id="queueGrid"></div>
+  <div class="empty-note" id="emptyNote">队列为空。先在上方选择图片，最多 20 张。</div>
+
+  <div class="lock-note" style="margin-top:16px;">
+    <span>💡</span>
+    <span>上传后<strong>自动开始</strong>后台逐张去人留衣，每张约 20~120 秒；期间可以关页，后台仍会继续，进度会自动保存。</span>
+  </div>
+
+</main>
+
+<script src="assets/js/api-client.js?v=1.8.394"></script>
+<script src="assets/js/batch.js?v=1.8.394"></script>
+<script src="assets/js/topbar-breath.js?v=1.8.394"></script>
+<script src="assets/js/nav-lock.js?v=1.8.394"></script>
+<script src="assets/js/qrcode-modal.js?v=1.8.394"></script>
+<script src="assets/js/img-degrade.js?v=1.8.394"></script>
+<script src="assets/js/no-url.js?v=1.8.394"></script>
+</body>
+</html>

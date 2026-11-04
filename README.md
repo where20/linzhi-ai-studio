@@ -168,3 +168,29 @@ curl -X DELETE http://localhost:3721/api-backend/delete \
 ## 📄 License
 
 MIT — 仅供学习研究。
+
+---
+
+## 🚀 V2 · 本地完整版（2026-11-04 升级）
+
+前端已同步线上 V1.8.394（20 版块全量），并在 `local-api.js` 增加本地适配层：
+
+| 能力 | 说明 |
+|---|---|
+| 🔓 免登录 | 门禁本地放行，无需注册/会员卡 |
+| ⚙️ 本地配置中心 | `/api/config` 读写 config.json 的 `ai` 字段（Key 落盘本机） |
+| 🤖 AI 直连 Agnes | 对话 `/api/ai/chat`（同步+异步 job）、生图 `/api/image/generate|img2img`、视频 `/api/video/generate` + status 轮询 |
+| 📰 热点本地聚合 | 新闻热点/全网热点走 RSS（36氪/IT之家/少数派/极客公园/量子位），30 分钟缓存 |
+| 🖼 作品墙 | 本地 JSON 存储（output/gallery.json），发布/撤下可用 |
+| 📤 上传 | `/api/upload/image` 本地落盘 output/uploads |
+
+产物统一落盘：`output/pictures|videos|uploads`，经 `/output/*` 同源访问。
+
+**使用**：
+```bash
+npm start                      # http://localhost:3721
+# 可选：config.json 的 ai.api_key 填 Agnes Key（sk- 开头），对话/生图/视频即真实可用
+# 未填时登录门禁照样全解锁，AI 调用返回引导提示
+```
+
+其余未本地化的 `/api/*` 端点仍兜底代理到原站（可在 config.json 切换后端）。

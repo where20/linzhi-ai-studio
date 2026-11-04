@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>收集时装 · 去角色 · 临智AI</title>
+  <link rel="stylesheet" href="assets/css/home.css?v=1.8.394">
+  <link rel="stylesheet" href="assets/css/glass.css?v=1.8.394">
+  <style>
+    .collect-grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+    @media (max-width: 860px){ .collect-grid{ grid-template-columns:1fr; } }
+    .gf-empty{ color:var(--text-secondary); text-align:center; padding:40px 10px; border:2px dashed var(--border); border-radius:var(--radius); }
+    .gf-preview{ width:100%; border-radius:var(--radius); border:1px solid var(--border); background:#fff; display:block; }
+    .save-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px; }
+    .save-row .form-group{ flex:1; min-width:140px; }
+    .collected-section{ margin-top:28px; }
+    .collect-grid-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px; margin-top:14px; }
+    .collect-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+    .collect-card img{ width:100%; aspect-ratio:3/4; object-fit:cover; background:#fff; display:block; }
+    .collect-card .meta{ padding:8px 10px; font-size:12px; color:var(--text-secondary); }
+    .collect-card .meta b{ color:var(--text); }
+    .pill{ display:inline-block; background:var(--primary-soft); color:var(--primary); border-radius:999px; padding:1px 8px; margin:2px 2px 0 0; font-size:11px; }
+    .hint-banner{ background:var(--primary-soft); color:var(--primary-hover); border:1px solid #4a515c; border-radius:var(--radius); padding:10px 14px; font-size:13px; margin-bottom:16px; }
+
+    /* ===== 上传原图 + 去角色：并排两格，各占 50% ===== */
+    .collect-top { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:stretch; }
+
+    /* 上传原图：与人像上传窗口同款（深底 + 网格漂移 + 冷光呼吸 + 图标浮动） */
+    .collect-top .drop-zone{
+      position:relative; overflow:hidden; isolation:isolate;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+      min-height:136px; padding:14px 12px !important;
+      border:1px dashed rgba(255,255,255,0.20) !important;
+      border-radius:12px !important;
+      background:#1f232a !important;
+      box-shadow:none !important;
+      transition:border-color .2s, box-shadow .2s, background .2s;
+    }
+    .collect-top .drop-zone::before{
+      content:''; position:absolute; inset:-60%;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size:22px 22px;
+      animation:pvGrid 18s linear infinite;
+      z-index:0; pointer-events:none;
+    }
+    .collect-top .drop-zone::after{
+      content:''; position:absolute; inset:0;
+      background:
+        radial-gradient(60% 60% at 50% 40%, rgba(122,196,255,0.18), transparent 62%),
+        radial-gradient(50% 50% at 85% 90%, rgba(110,245,210,0.10), transparent 60%);
+      animation:pvGlow 6s ease-in-out infinite;
+      z-index:0; pointer-events:none;
+    }
+    .collect-top .drop-zone > *{ position:relative; z-index:1; }
+    .collect-top .drop-zone-icon{
+      font-size:30px !important;
+      animation:pvFloat 4.2s ease-in-out infinite;
+      filter:drop-shadow(0 0 10px rgba(122,196,255,.45));
+    }
+    .collect-top .drop-zone-text{ color:var(--ink) !important; margin-top:6px; }
+    .collect-top .drop-zone-hint{ color:var(--ink-soft) !important; margin-top:4px; }
+    .collect-top .drop-zone:hover,
+    .collect-top .drop-zone.dragover{
+      border-color:rgba(122,196,255,0.55) !important;
+      background:#222834 !important;
+      box-shadow:0 0 24px rgba(122,196,255,.20), inset 0 0 30px rgba(122,196,255,.09) !important;
+    }
+    @media (prefers-reduced-motion: reduce){
+      .collect-top .drop-zone::before,
+      .collect-top .drop-zone::after,
+      .collect-top .drop-zone-icon{ animation:none !important; }
+    }
+
+    /* 去角色：右半格，与上传区等高；图标 + 文字上下两行，与左侧上传区同构 */
+    .collect-top .collect-go{
+      width:100%; height:100%; min-height:136px;
+      border-radius:12px !important;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+      background:linear-gradient(135deg, #4fd8b6 0%, #2fa6d8 52%, #1b5bb8 100%) !important;
+      color:#fff !important;
+      border:1px solid rgba(255,255,255,0.22) !important;
+      box-shadow:
+        inset 0 1px 1px rgba(255,255,255,0.35),
+        0 8px 22px rgba(11,47,116,0.35) !important;
+      text-shadow:0 1px 3px rgba(3,25,60,0.28);
+      transition:transform .15s, box-shadow .15s, filter .15s;
+    }
+    .collect-top .go-ico{
+      font-size:34px; line-height:1;
+      animation:pvFloat 4.2s ease-in-out infinite;
+      filter:drop-shadow(0 0 10px rgba(255,255,255,0.35));
+    }
+    .collect-top .go-txt{ font-size:17px !important; font-weight:700 !important; letter-spacing:1px; }
+    .collect-top .collect-go:hover{
+      filter:brightness(1.06);
+      box-shadow:
+        inset 0 1px 1px rgba(255,255,255,0.4),
+        0 10px 28px rgba(11,47,116,0.48) !important;
+    }
+    .collect-top .collect-go:disabled{
+      opacity:0.7 !important;
+      cursor:progress;
+    }
+
+    /* 原图预览不要铺满整卡 */
+    #srcBox .gf-preview{ max-width:300px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="index.html">
+        <span class="brand__logo">🧭</span>
+        <span class="brand__name">临智AI</span>
+      </a>
+      <nav class="topnav">
+      <a href="index.html"><span class="nav-ico">🏠</span> 首页</a>
+      <a href="home.html"><span class="nav-ico">🎨</span> 试装</a>
+      <a href="collect.html" class="active"><span class="nav-ico">👗</span> 收集</a>
+      <a href="batch.html"><span class="nav-ico">📦</span> 批量</a>
+      <a href="pose.html"><span class="nav-ico">🧍</span> 姿鉴</a>
+      <a href="costume.html"><span class="nav-ico">👚</span> 衣鉴</a>
+      <a href="settings.html"><span class="nav-ico">⚙</span> 设置</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main workbench-main">
+    <div class="hint-banner">
+      👗 <b>去角色</b>：上传带模特的原图 → 去掉人物只保留整套服装 → 白底电商商品图。
+      满意后可「永久收集」，系统自动按 <b>Z0001、Z0002…</b> 编号存入衣装图鉴的「收集」分类。
+    </div>
+
+    <div class="collect-grid">
+      <!-- 左：上传与参数 -->
+      <section class="card">
+        <div class="card-header"><span class="icon">📤</span> 上传原图（带模特的服装照 · 必填）</div>
+
+        <!-- 上传原图 + 去角色：并排两格，各占 50% -->
+        <div class="collect-top">
+          <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="drop-zone-icon">🧍‍♀️</div>
+            <div class="drop-zone-text">拖拽图片到此处，或<strong>点击选择</strong></div>
+            <div class="drop-zone-hint">支持 JPG / PNG / WebP</div>
+            <input type="file" id="fileInput" accept="image/*" hidden onchange="handleFile(this)">
+          </div>
+          <button class="btn btn-primary collect-go" id="btnGen" onclick="runQimote()"><span class="go-ico">👗</span><span class="go-txt">去角色</span></button>
+        </div>
+        <div id="srcBox" style="margin-top:10px; display:none;">
+          <img id="srcImg" class="gf-preview" alt="原图">
+          <button class="btn btn-sm" style="margin-top:6px;" onclick="clearSrc()">🗑 清除原图</button>
+        </div>
+
+        <div class="form-group" style="margin-top:14px;">
+          <label class="form-label">🎚 重绘幅度：<span id="strengthVal">0.35</span></label>
+          <input type="range" id="strength" min="0.35" max="0.50" step="0.05" value="0.35"
+                 style="width:100%;" oninput="document.getElementById('strengthVal').textContent=this.value">
+          <div class="form-hint"><b>0.35 推荐</b>（最大保留衣服版型褶皱）· 0.50 改动最大（原图人物遮挡严重时选）</div>
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">✍️ 这套衣服的简单描述（追加在固定模板<b>开头</b>）</label>
+          <textarea class="form-textarea" id="desc" style="min-height:64px;"
+            placeholder="例如：一条垂坠感墨绿色长款丝绒连衣裙&#10;留空则只用内置万能模板（所有衣服通用）"></textarea>
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">📐 输出尺寸</label>
+          <select class="form-select" id="size" disabled>
+            <option value="1536x2720" selected>1536 × 2720（9:16 竖版）</option>
+          </select>
+          <input type="hidden" id="sizeValue" value="1536x2720">
+          <div class="form-hint">🔒 已锁定 9:16 竖版（1536 × 2720）——商汤官方 9:16 推荐档位（2K）。</div>
+        </div>
+
+        <div id="genStatus" style="font-size:12px; color:var(--text-secondary); margin-top:10px;"></div>
+      </section>
+
+      <!-- 右：输出与收集 -->
+      <section class="card">
+        <div class="card-header"><span class="icon">🖼</span> 输出预览（去角色后的白底商品图）</div>
+        <div id="outEmpty" class="gf-empty">👗 还没有成图<br>上传原图后点「去角色」</div>
+        <img id="outImg" class="gf-preview" alt="成图" style="display:none;">
+
+        <div id="saveBox" style="display:none; margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+          <div class="card-header" style="border:none; padding:0; margin-bottom:8px;">
+            <span class="icon">💾</span> 满意？永久收集到衣装图鉴「收集」分类
+          </div>
+
+          <!-- 点点 AI 自动命名 / 打标签 -->
+          <div class="ai-manage">
+            <button class="btn btn--ghost" id="btnAiManage" onclick="aiManage()">✨ AI 自动命名打标</button>
+            <span class="form-hint" style="margin:0;">依据上面的描述自动生成名称、主色、分类、品类与标签</span>
+          </div>
+          <div class="ai-manage__result" id="aiManageResult" style="display:none;"></div>
+
+          <div class="save-row">
+            <div class="form-group">
+              <label class="form-label">主色</label>
+              <input class="form-input" id="saveColor" placeholder="如 ivory / 墨绿 / white">
+            </div>
+            <div class="form-group">
+              <label class="form-label">标签（逗号分隔）</label>
+              <input class="form-input" id="saveTags" placeholder="丝绒, 连衣裙, 长款">
+            </div>
+            <button class="btn btn-primary" id="btnSave" onclick="saveCollect()">💾 收集（Z编号）</button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+          <button class="btn btn-sm" id="btnDownload" style="display:none;" onclick="downloadOut()">📥 下载</button>
+          <button class="btn btn-sm" style="display:none; color:var(--danger);" id="btnClearOut" onclick="clearOut()">🗑 清除成图</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- 已收集列表 -->
+    <section class="collected-section">
+      <div class="card-header"><span class="icon">📚</span> 已收集时装（衣装图鉴「收集」分类）
+        <span id="collectedCount" style="color:var(--text-secondary); font-weight:400; margin-left:8px;"></span>
+      </div>
+      <div id="collectedList" class="collect-grid-list"></div>
+      <div id="collectedEmpty" class="gf-empty" style="margin-top:14px;">还没有收集的衣服，去上传一张带模特的照片试试吧。</div>
+    </section>
+  </main>
+
+  <script src="assets/js/img-prep.js?v=1.8.394"></script>
+<script src="assets/js/workspace-state.js?v=1.8.394"></script>
+<script src="assets/js/api-client.js?v=1.8.394"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let srcDataUrl = null;   // 原图 base64
+    let outData = null;      // 生成结果 {url, b64}
+
+    /* ===== 上传原图 ===== */
+    const dz = $('dropZone');
+    ['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.add('dragover');}));
+    ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e=>{e.preventDefault(); dz.classList.remove('dragover');}));
+    dz.addEventListener('drop', e=>{
+      const f = e.dataTransfer.files[0];
+      if (f) readFile(f);
+    });
+
+    function handleFile(input){ if (input.files[0]) readFile(input.files[0]); }
+
+    /* 原图先本地压缩：手机原图 4~6MB 直接传会被上游拒（尺寸/体积超限），
+       顺带解决 iPhone HEIC 与 EXIF 旋转问题 */
+    async function readFile(file){
+      if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+        $('genStatus').textContent = '❌ 请选择图片文件';
+        return;
+      }
+      $('genStatus').textContent = '正在处理原图…';
+      try {
+        const r = await prepImage(file, { maxDim: 1600, quality: 0.92 });
+        srcDataUrl = r.dataUrl;
+        $('srcImg').src = srcDataUrl;
+        $('srcBox').style.display = 'block';
+        // 存进 IndexedDB：点别的页面回来，原图还在，不用重新上传
+        if (window.Workspace) {
+          window.Workspace.saveImage('collect:src', srcDataUrl);
+          window.Workspace.save('collect', { hasSrc: true });
+        }
+        const kb = Math.round(r.dataUrl.length * 0.75 / 1024);
+        $('genStatus').textContent =
+          '原图已就绪 ' + r.width + '×' + r.height + '（约 ' + kb + ' KB）' +
+          (r.scaled ? '，已自动缩图以免上游拒绝' : '') + '，点「去角色」开始生成。';
+      } catch (e) {
+        $('genStatus').textContent = '❌ ' + errText(e);
+      }
+    }
+
+    function clearSrc(){
+      srcDataUrl = null;
+      $('srcImg').src = '';
+      $('srcBox').style.display = 'none';
+      $('fileInput').value = '';
+      if (window.Workspace) {
+        window.Workspace.dropImage('collect:src');
+        window.Workspace.save('collect', { hasSrc: false, result: null });
+      }
+    }
+
+    /* ===== 去角色生成 ===== */
+    /* 按钮是「图标 + 文字」两行结构，改文案时要保持结构，别用 textContent 抹掉 */
+    function setGoLabel(ico, txt){
+      const btn = $('btnGen');
+      btn.innerHTML = '<span class="go-ico">' + ico + '</span><span class="go-txt">' + txt + '</span>';
+    }
+
+    async function runQimote(){
+      if (!srcDataUrl){ alert('请先上传带模特的服装照'); return; }
+      const btn = $('btnGen');
+      btn.disabled = true; setGoLabel('⏳', '去角色中…');
+
+      // 生成要 30~200 秒，给一个走秒的提示，免得用户以为卡死了
+      const t0 = Date.now();
+      const tick = () => {
+        const s = Math.round((Date.now() - t0) / 1000);
+        $('genStatus').textContent = '正在生成白底商品图…已等 ' + s + ' 秒（通常 30~200 秒，请不要关闭页面）';
+      };
+      tick();
+      const timer = setInterval(tick, 1000);
+
+      if (window.TopbarBreath) window.TopbarBreath.start(); // 顶栏深呼吸
+      try {
+        // 带上用户自己在「设置」页填的 Key：去角色固定走商汤，但 Key 用你自己的
+        let pcfg = {};
+        try { pcfg = JSON.parse(localStorage.getItem('poseatlas_provider') || '{}') || {}; } catch (e) { pcfg = {}; }
+        /* 去角色固定走商汤：Key 必须取「商汤」那一把（按提供商分存的），
+           别把 AGNES 的 Key 拿去打 token.sensenova.cn */
+        let km = {};
+        try { km = JSON.parse(localStorage.getItem('poseatlas_keys') || '{}') || {}; } catch (e) { km = {}; }
+        const qKey = km.sensenova || (pcfg.provider === 'sensenova' ? (pcfg.key || '') : '');
+        const resp = await apiFetch('/api/qimote', {
+          method:'POST',
+          body: JSON.stringify({
+            image: srcDataUrl,
+            desc: $('desc').value,
+            strength: parseFloat($('strength').value),
+            size: $('sizeValue').value,
+            apiKey: qKey,
+            model: pcfg.provider === 'sensenova' ? (pcfg.model || '') : '',
+          })
+        });
+        const data = resp;
+        if (!data.ok){ throw new Error(errText(data) || '生成失败'); }
+        outData = { url: data.url, b64: data.b64 };
+        if (window.Workspace) {
+          window.Workspace.save('collect', {
+            result: { url: data.url, at: Date.now() },
+            desc: $('desc').value, strength: $('strength').value, sizeValue: $('sizeValue').value,
+          });
+        }
+        $('outImg').src = data.url;
+        $('outImg').style.display = 'block';
+        $('outEmpty').style.display = 'none';
+        $('saveBox').style.display = 'block';
+        $('btnDownload').style.display = 'inline-block';
+        $('btnClearOut').style.display = 'inline-block';
+        $('genStatus').textContent = '✅ 生成成功（用时 ' + Math.round((Date.now()-t0)/1000) + ' 秒）！可下载，或填写信息后「收集」。';
+      } catch(e){
+        $('genStatus').textContent = '❌ 生成失败：' + (errText(e) || '未知错误');
+      } finally {
+        clearInterval(timer);
+        btn.disabled = false; setGoLabel('👗', '去角色');
+        if (window.TopbarBreath) window.TopbarBreath.stop();
+      }
+    }
+
+    /* ===== 收集入库（Z0001~） ===== */
+    async function saveCollect(){
+      if (!outData || (!outData.b64 && !outData.url)){ alert('请先生成白底商品图'); return; }
+      const btn = $('btnSave');
+      btn.disabled = true; btn.textContent = '💾 收集中…';
+      try {
+        // 成图 PNG 有 4~5MB，base64 后要 6MB+，手机上直接传容易失败/超时。
+        // 服务端已经把图存到 generated/ 了，这里只传路径，由服务端就地复制。
+        const payload = {
+          desc: $('desc').value.trim() || '',
+          color: $('saveColor').value.trim() || 'white',
+          tags: $('saveTags').value.trim(),
+        };
+        if (outData.url && outData.url.charAt(0) === '/' && !outData.url.startsWith('//')) {
+          payload.srcPath = outData.url;
+        } else {
+          payload.image = 'data:image/png;base64,' + (outData.b64 || '');
+        }
+        const resp = await apiFetch('/api/collect', {
+          method:'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = resp;
+        if (!data.ok){ throw new Error(errText(data) || '收集失败'); }
+        $('genStatus').textContent = '✅ 已永久收集，编号 ' + data.id + '（已写入衣装图鉴「收集」分类）';
+        $('saveColor').value=''; $('saveTags').value='';
+        loadCollected();
+      } catch(e){
+        $('genStatus').textContent = '❌ ' + errText(e);
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 收集（Z编号）';
+      }
+    }
+
+    /* ===== 下载 / 清除 ===== */
+    function downloadOut(){
+      if (!outData) return;
+      const a = document.createElement('a');
+      a.href = outData.url; a.download = 'qimote_' + Date.now() + '.png';
+      a.click();
+    }
+    function clearOut(){
+      outData = null;
+      $('outImg').src=''; $('outImg').style.display='none';
+      $('outEmpty').style.display='block';
+      $('saveBox').style.display='none';
+      $('btnDownload').style.display='none';
+      $('btnClearOut').style.display='none';
+    }
+
+    /* ===== 点点 AI：自动命名 / 打标签 =====
+       ★ 密钥只在服务器端，前端只调后端代理，页面里没有 key */
+    async function aiManage(){
+      const text = $('desc').value.trim();
+      if (!text){
+        alert('请先在左边填写这套衣服的简单描述，再点「✨ AI 自动命名打标」');
+        return;
+      }
+      const btn = $('btnAiManage');
+      btn.disabled = true;
+      const old = btn.textContent;
+      btn.textContent = '⏳ 分析中…';
+      try {
+        const resp = await apiFetch('/api/llm/manage', {
+          method:'POST',
+          body: JSON.stringify({ text })
+        });
+        if (!resp.ok) throw new Error(errText(resp) || '分析失败');
+        const d = resp.data || {};
+        // 自动填入表单
+        if (d.name)      $('desc').value = d.name;
+        if (d.color)     $('saveColor').value = d.color;
+        if (Array.isArray(d.tags) && d.tags.length) $('saveTags').value = d.tags.join(', ');
+
+        const box = $('aiManageResult');
+        box.style.display = 'block';
+        box.innerHTML =
+          '<dl>' +
+          '<dt>名称</dt><dd>' + esc(d.name || '—') + '</dd>' +
+          '<dt>描述</dt><dd>' + esc(d.main || '—') + '</dd>' +
+          '<dt>主色</dt><dd>' + esc(d.color || '—') + '</dd>' +
+          '<dt>分类</dt><dd>' + esc(d.category || '—') + '</dd>' +
+          '<dt>品类</dt><dd>' + esc(d.group || '—') + '</dd>' +
+          '</dl>' +
+          (Array.isArray(d.tags) && d.tags.length
+            ? '<div class="ai-pills">' + d.tags.map(t=>'<span class="ai-pill">'+esc(t)+'</span>').join('') + '</div>'
+            : '');
+        $('genStatus').textContent = '✨ AI 已生成名称、主色与标签，可直接收集。';
+      } catch(e){
+        $('genStatus').textContent = '❌ AI 分析失败：' + errText(e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = old;
+      }
+    }
+
+    /* ===== 已收集列表 ===== */
+    // 字段安全转换：任何对象/数组都转成可显示的文本，避免 [object Object]
+    function txt(v, fallback){
+      if (typeof v === 'string') return v;
+      if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+      if (v && typeof v === 'object'){
+        const t = v.zh || v.en || v.ja;
+        if (typeof t === 'string') return t;
+      }
+      return fallback || '';
+    }
+    function esc(s){
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+    function tagList(v){
+      const arr = Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[,，\s]+/) : (v ? [v] : []));
+      return arr.map(x => txt(x, '')).filter(Boolean);
+    }
+
+    async function loadCollected(){
+      try {
+        const resp = await apiFetch('/api/collected');
+        const data = resp;
+        const items = data.items || [];
+        $('collectedCount').textContent = '共 ' + items.length + ' 件';
+        const box = $('collectedList');
+        if (items.length === 0){ $('collectedEmpty').style.display='block'; box.innerHTML=''; return; }
+        $('collectedEmpty').style.display='none';
+        // 倒序：最新在前
+        box.innerHTML = items.slice().reverse().map(it=>{
+          const mainText = txt(it.main, '');
+          const tags = tagList(it.tags);
+          return `
+          <div class="collect-card">
+            <img src="${esc(it.thumb)}" alt="${esc(it.id)}" loading="lazy">
+            <div class="meta">
+              <b>${esc(it.id)}</b> · ${esc(txt(it.color,''))}<br>
+              ${tags.slice(0,4).map(t=>`<span class="pill">${esc(t)}</span>`).join('')}
+              ${mainText?`<div style="margin-top:4px;">${esc(mainText.slice(0,30))}</div>`:''}
+            </div>
+          </div>`;
+        }).join('');
+      } catch(e){
+        console.error(e);
+        $('collectedEmpty').style.display='block';
+        $('collectedEmpty').textContent = '已收集列表加载失败：' + errText(e);
+      }
+    }
+
+    loadCollected();
+
+    /* ===== 换页回来接着干：原图 / 参数 / 上一次结果全部还原 ===== */
+    (async function restoreCollect(){
+      if (!window.Workspace) return;
+      const st = window.Workspace.load('collect');
+      if (!st || !st.__at) return;
+      if (st.desc) $('desc').value = st.desc;
+      if (st.strength) $('strength').value = st.strength;
+      if (st.sizeValue) $('sizeValue').value = st.sizeValue;
+      if (st.hasSrc) {
+        const d = await window.Workspace.loadImage('collect:src');
+        if (d) {
+          srcDataUrl = d;
+          $('srcImg').src = d;
+          $('srcBox').style.display = 'block';
+          $('genStatus').textContent = '已恢复上次上传的原图，可直接点「去角色」继续。';
+        }
+      }
+      if (st.result && st.result.url) {
+        outData = { url: st.result.url };
+        $('outImg').src = st.result.url;
+        $('outImg').style.display = 'block';
+        $('outEmpty').style.display = 'none';
+        $('saveBox').style.display = 'block';
+        $('btnDownload').style.display = 'inline-block';
+        $('btnClearOut').style.display = 'inline-block';
+        $('genStatus').textContent = '已恢复上一次的白底商品图，可直接下载或继续「收集」。';
+      }
+    })();
+  </script>
+<script src="assets/js/topbar-breath.js?v=1.8.394"></script>
+<script src="assets/js/nav-lock.js?v=1.8.394"></script>
+<script src="assets/js/qrcode-modal.js?v=1.8.394"></script>
+<script src="assets/js/img-degrade.js?v=1.8.394"></script>
+<script src="assets/js/no-url.js?v=1.8.394"></script>
+</body>
+</html>

@@ -13,3 +13,9 @@ npm-debug.log*
 
 # 本地保存的生成资源（SAVE_LOCAL=1 时下载到此，勿提交）
 output/
+
+# 本地备份 / 测试产物 / 工作区记忆
+backup-*/
+.pw-browsers/
+.pw-shot/
+.workbuddy/
