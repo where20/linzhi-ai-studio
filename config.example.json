@@ -14,5 +14,26 @@
       "description": "示例：自建/兼容后端，把 target 改成你的服务地址即可。"
     }
   },
-  "active": "original"
+  "active": "original",
+  "ai": {
+    "api_key": "Agnes 官方 Key（sk- 开头，apihub.agnes-ai.com）。留空则自动走免 Key 通道",
+    "sensenova_api_key": "",
+    "deepseek_api_key": "",
+    "doubao_api_key": "",
+    "qwen_api_key": "",
+    "minimax_api_key": "",
+    "dots_api_key": "",
+    "default_text_model": "agnes-2.5-flash",
+    "default_image_model": "agnes-image-2.5-flash",
+    "default_video_model": "agnes-video-2.5-flash",
+    "prefer_free": false,
+    "tts_base_url": "（可选）OpenAI 兼容 TTS 的 baseUrl，如豆包/MiniMax/自建；留空则用本机 edge-tts/say",
+    "tts_api_key": "",
+    "tts_model": "tts-1",
+    "tts_voice": "alloy"
+  },
+  "local": {
+    "vault_path": "~/Documents/Obsidian Vault",
+    "engine_output_folder": "_Agnes"
+  }
 }

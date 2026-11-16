@@ -1,0 +1,46 @@
+# 提取 · Obsidian API 依赖面
+
+## require("obsidian") 出现次数
+53
+
+## Obsidian API 调用统计
+ 168 .vault.adapter
+ 145 .app.vault
+  42 .vault.getAbstractFileByPath
+  28 .app.workspace
+  17 .adapter.exists
+  14 .fileManager.trashFile
+  12 .adapter.readBinary
+  10 .app.fileManager
+   8 .vault.create
+   7 .vault.getFiles
+   7 .vault.createBinary
+   7 .adapter.mkdir
+   6 .vault.modify
+   6 .adapter.write
+   6 .adapter.read
+   5 .vault.read
+   4 .adapter.list
+   3 .vault.modifyBinary
+   3 .adapter.writeBinary
+   3 .adapter.remove
+   2 .workspace.getLeavesOfType
+   2 .vault.readBinary
+   2 .vault.cachedRead
+   2 .fileManager.renameFile
+   2 .app.saveLocalStorage
+   1 .workspace.getLeaf
+   1 .workspace.documentEl
+   1 .vault.getAllLoadedFiles
+   1 .vault.configDir
+   1 .scope.register
+   1 .commands.refreshCommands
+   1 .commands.commands
+   1 .app.setting
+   1 .app.loadLocalStorage
+   1 .adapter.stat
+   1 .adapter.rmdir
+
+## Node 内建依赖
+   1 require("child_process")
+   2 require("os")

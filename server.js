@@ -94,13 +94,17 @@ const appJsSource = fs.readFileSync(path.join(__dirname, 'public', 'js', 'app.js
 const indexHtmlSource = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
 // 合剪模块（✂️ AI一键成片）：独立文件，body 末尾加载（与原站一致）
 const hejianJsSource = fs.readFileSync(path.join(__dirname, 'public', 'hejian', 'hejian.js'), 'utf-8');
+const entryJsSource = fs.readFileSync(path.join(__dirname, 'public', 'studio', 'entry.js'), 'utf-8');
+const fusionJsSource = fs.readFileSync(path.join(__dirname, 'public', 'fusion', 'patch.js'), 'utf-8');
 // 缓存破坏版本号：随 app.js 内容变化，确保浏览器/预览始终拿到最新版本
 const APPJS_VERSION = crypto.createHash('md5').update(appJsSource).digest('hex').slice(0, 8);
 const HEJIAN_VERSION = crypto.createHash('md5').update(hejianJsSource).digest('hex').slice(0, 8);
+const ENTRY_VERSION = crypto.createHash('md5').update(entryJsSource).digest('hex').slice(0, 8);
+const FUSION_VERSION = crypto.createHash('md5').update(fusionJsSource).digest('hex').slice(0, 8);
 // 首页完整 HTML：启动时拼装一次，每次请求直接返回（避免重复读盘 + 字符串替换）
 const fullHtml = indexHtmlSource.replace(
     '</body>',
-    `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n<script src="/hejian/hejian.js?v=${HEJIAN_VERSION}"></script>\n</body>`
+    `${bodyHtml}\n<script src="/js/app.js?v=${APPJS_VERSION}"></script>\n<script src="/hejian/hejian.js?v=${HEJIAN_VERSION}"></script>\n<script src="/studio/entry.js?v=${ENTRY_VERSION}" defer></script>\n<script src="/fusion/patch.js?v=${FUSION_VERSION}" defer></script>\n</body>`
 );
 
 // ===== 首页：直接返回预拼装的完整 HTML =====
@@ -425,7 +429,7 @@ async function rewriteAssetUrls(body) {
 // ===== 本地适配层：门禁放行 / 本地配置 / Agnes 直连 AI / RSS 热点 / 作品墙 / 上传 =====
 // ⚠️ 必须在 /api 代理之前注册，命中本地路由的请求不再转发原站
 // JSON 解析只对本地处理的 POST 路径生效（全局解析会吃掉流，导致代理转发失败）
-const LOCAL_JSON_RE = /^\/api\/(member|auth|account|config|ai\/chat|image\/(generate|img2img|batch-submit)|video\/generate|gallery)/;
+const LOCAL_JSON_RE = /^\/api\/(member|auth|account|config|ai\/chat|image\/(generate|img2img|batch-submit)|video\/generate|gallery|local\/(storyboard|pipeline|tts)|providers)/;
 app.use('/api', (req, res, next) => {
     if (req.method === 'POST' && LOCAL_JSON_RE.test(req.originalUrl.split('?')[0])) return express.json()(req, res, next);
     next();

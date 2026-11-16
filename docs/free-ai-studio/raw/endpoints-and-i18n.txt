@@ -1,0 +1,153 @@
+# 提取 · 外部端点与厂商
+
+## 全部 URL 常量
+http://127.0.0.1
+http://localhost
+http://www.w3.org/2000/svg
+http://www.w3.org/2001/10/synthesis
+https://ace-step-ace-step.hf.space
+https://afdian.com/a/xiaosong8584
+https://ai-costume-gallery.pages.dev/
+https://ai-portrait-gallery.pages.dev/
+https://ai-pose-gallery.pages.dev/
+https://api.agnes-ai.cn/v1
+https://api.deepseek.com/v1
+https://api.github.com/repos/
+https://api.minimaxi.com/v1
+https://api.openai.com/v1
+https://api.xiaomimimo.com/v1
+https://ark.cn-beijing.volces.com/api/v3
+https://blockrun.ai/api/v1
+https://cdn.jsdelivr.net/gh/
+https://cdn.jsdelivr.net/npm/hanzi-writer-data
+https://dashscope.aliyuncs.com
+https://dashscope.aliyuncs.com/compatible-mode/v1
+https://gh-proxy.com/
+https://ghfast.top/
+https://ghproxy.net/
+https://gitee.com/
+https://github.com/HRuiCcc/RuiC-PoseAtlas
+https://github.com/rany2/edge-tts
+https://github.com/xiaosong8584
+https://github.com/zhilinAI/monster-illustrations
+https://gitlab.com/
+https://gitlab.com/api/v4/projects/
+https://image.pollinations.ai/prompt/
+https://imagefree.net
+https://my.proxy/
+https://oai.endpoints.kepler.ai.cloud.ovh.net/v1
+https://open.bigmodel.cn/api/paas/v4
+https://openspeech.bytedance.com/api/v3/tts/create
+https://raw.githubusercontent.com/
+https://space.bilibili.com/505631203
+https://text.pollinations.ai/openai
+https://token.sensenova.cn/v1
+https://unpkg.com/hanzi-writer-data
+https://veda.hanxiao.run
+https://veda.hanxiao.run.
+https://your-ace-step-copy.hf.space
+https://your-proxy.com/v1
+
+## i18n key 前缀分布
+1720 settings
+1010 wb
+ 951 explain
+ 782 prog
+ 768 err
+ 577 pipe
+ 371 drama
+ 321 tts
+ 314 mtv
+ 307 cover
+ 278 dancer
+ 275 anchor
+ 225 video
+ 220 reference
+ 184 image
+ 181 broll
+ 165 canvas
+ 161 common
+ 138 zhiguai
+ 131 tab
+ 127 cast
+ 112 dressup
+ 111 inkos
+  85 voice
+  84 text
+  81 notice
+  65 asset
+  56 vip
+  51 model
+  48 status
+  46 picker
+  43 cmd
+  36 vendor
+  35 audio8Service
+  28 log
+  27 gallery
+  25 ad
+  24 ffmpeg
+  24 0
+  23 skeleton
+  23 pro
+  15 probe
+   9 view
+   9 pool
+   8 powershell
+   7 python
+   5 README
+   4 ribbon
+   4 8
+   4 3
+   4 20
+   4 15
+   4 127
+   3 shots
+   3 project
+   3 node
+   3 manifest
+   3 1
+   2 subtitled
+   2 render
+   2 pipeline
+   2 compare
+   2 bullet
+   1 voiced
+   1 turn
+   1 speech
+   1 simsun
+   1 simkai
+   1 simhei
+   1 sidecar
+   1 segments
+   1 requirements
+   1 package
+   1 msyhbd
+   1 msyh
+   1 line
+   1 joined
+   1 ghproxy
+   1 ghfast
+   1 ffprobe
+   1 doc
+   1 concat
+   1 code
+   1 brushes
+   1 brief
+   1 UserGuide
+   1 Songti
+   1 STZHONGS
+   1 QUICKSTART
+   1 PingFang
+   1 INSTALL
+   1 GUIDE
+   1 Deng
+   1 CONTRIBUTING
+   1 CHANGELOG
+   1 BGM
+   1 ARCHITECTURE
+   1 4
+   1 155
+
+## i18n key 总数
+3305

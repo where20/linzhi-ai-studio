@@ -1,0 +1,229 @@
+# Free AI Studio — Obsidian 插件
+
+> **语言 / Language**：[English](./README.md) · [中文](./README-cn.md)
+
+在 Obsidian 里一站式生成 **文本 / 图片 / 视频 / 配音 / 小说封面 / 数字人口播**，并合成 **短剧成片**（含红果规范七阶段流水线）。多厂商 API 统一管理，产物直接写进 Vault，支持 Markdown 双链与重启续跑。
+
+- 当前版本：**v0.17.30**（2026-10-27）
+- 要求 Obsidian **≥ 1.7.2**
+- 桌面端专用（`isDesktopOnly: true`；需 Node/Electron 与 ffmpeg）
+- 发布说明：[`CHANGELOG.md`](./CHANGELOG.md)
+
+---
+
+## 核心能力
+
+| 面板 | 能力 |
+|------|------|
+| **文本** | 4 种模式（自由写作 / 短剧大纲 / 分镜脚本 / 提示词优化）+ **6 种剧本质量模式**（体检 / 改写 / 70 集拆分 / 锁定码设计 / 八步分镜 / 首尾帧继承）；JSON 输出自动结构化渲染；保存为带 frontmatter 的笔记 |
+| **图片** | 文生图 / 图生图；参考图可从 **Vault 选择**、**本地上传**或粘贴 URL；自动压缩归一化；并发闸门防 429 |
+| **视频** | 文生视频 / 图生视频；四分支协议；任务持久化，**重启自动续跑** |
+| **配音** | **豆包 Seed-Audio 整集配音**（多角色对白 + 环境音 + BGM + 字级字幕）+ **Audio8 本地引擎**（本机部署，免费）+ **MTV** 音乐驱动视频混剪。*edge-tts 引擎（9 音色 / 6 情感 / 3 语速 / 标点停顿）为 **VIP 专属*** |
+| **短剧** | 梗概 → 大纲 → 分镜 JSON → 逐镜图片 → 逐镜视频 → **配音 → 成片合成** → Markdown 笔记，一键编排 |
+| **红果 Pro** | 剧本 → 分镜 → 定妆 → 首尾帧 → 视频 → 配音 → 成片，**七阶段编排**；多版选优 + 补写 + 定点校正；**视频 KEY 池轮换**；断点续跑 + 单点重生 |
+| **封面** | 书名 + 作者 + 简介（**可导入 TXT/DOCX**）→ 文本模型产出提示词 → 出图 → **裁到目标画幅** → **排版书名/作者名** → 三件套写入 Vault；实时排版预览 |
+| **数字人** | 文稿 → **分段** → 配音 → **形象图 I2V**（失败自动降级 Ken Burns）→ 段成片 → 字幕 → 成片，**四阶段编排**；5 种表演风格；逐段重生 |
+| **解说片** | 调研 → 口播稿 → 分镜 → 帧图 → 配音 → **Remotion 渲染**；**BGM 底轨**（C 大调 + 音阶琶音）+ 静态 QC 报告；三阶段 system 提示词可配置 |
+| **日志** | **运行期追踪面板**：HTTP 请求 / ffmpeg 子进程 / 各流水线阶段推进的完整时间线；模块过滤、自动跟随最新、一键导出为笔记 |
+| **B-roll** | 背景视频五阶段幂等流水线；角色三步（建档 / 定妆 / 定锚）保人物一致；**零模型自动分幕**（ffmpeg 静音检测 + 按字数摊文稿）；抽帧联系表；合成成片（音乐不提速，画面冻结末帧迁就） |
+| **InkOS 写作台** | Vault 原生小说工程：章节 + 资产库 + AI 续写 + 章节→分镜；**送入红果 Pro** 打通「写 → 拍」；跨项目资产复用 |
+| **无限画布** | 节点图编排：文本 / 图片 / 视频三类节点 + 依赖连线 + 并行生成 + 视频首帧反向继承；禁自连 / 重复 / 悬空 / 成环 |
+| **白板渲染动画** | SRT/ASS 字幕 → 分幕 → 逐幕 AI 线稿 + **OpenCV 确定性渲染** → 合并成片（**烧硬字幕 + 按字幕自动 TTS 配音**）；每幕只有一张线稿是 AI 画的，动画本身由代码算出，渲染零 token；引擎走外部目录分发，可填外部 Python 免建 venv |
+
+**共同特性**
+
+- 8 厂商统一路由 + Key 回退链（自定义模型 → 单厂商 Key → 全局 text Key → Agnes 主 Key）
+- **账号池（本机免费额度池）**：国内 doubao-account-pool / 海外 dola-pool；地址与模型 ID 解耦，带连通性检测
+- **视频 KEY 池**：最多 3 把按镜号轮换，配进程级提交窗口，解决"一把 KEY 撑不完 10 个镜"
+- **ffmpeg 成片**：拼接（自动处理分辨率/帧率不一致）、字幕烧录、音画合轨；探测不到二进制时逐级降级
+- **Canvas 排版**：封面裁剪与文字排版全在 Canvas 2D 完成，不依赖 PIL / ffmpeg
+- **幂等阶段**：三条主流水线的每个阶段都是独立幂等函数，每步落盘 → **断点续跑白捡**
+- **VIP 门禁**：`deviceFingerprint` + gate 双层，VIP 用户不显示广告
+- **顶部广告位**：预留态，默认不显示，作者可后期一键开启
+- **通用韧性**：指数退避重试器 + 并发信号量 + edge-tts 时钟漂移自愈 + 微软服务故障识别
+- **Ollama 本地模型自动探测**（启动 + 每 5 分钟）
+- **任务清理**：30 天自动 + 手动按钮
+- **Popout 窗口与主题切换适配**
+- **UI 可访问性**：删除二次确认 5 处危险操作、状态 chip、折叠角标、快捷键可见、聚焦态样式
+
+---
+
+## VIP 功能与付费说明
+
+本插件的核心生成功能全部免费。以下 **高级流水线为 VIP 专属**（需激活；未激活时对应标签/命令隐藏，激活后立即出现）：
+
+| VIP 专属功能 | 说明 |
+|--------------|------|
+| **红果短剧 Pro**（`pro`） | 七阶段短剧成片编排 |
+| **数字人口播**（`anchor`） | 四阶段真人肖像转视频流水线 |
+| **封面**（`cover`） | 小说封面生成与标题/作者排版 |
+| **让女神跳舞**（`dancer`） | Wan-Dancer 音乐驱动舞蹈视频生成（阿里云 DashScope `wan2.2-dancer`） |
+| **B-roll 背景视频**（`broll`） | 五阶段幂等流水线：素材 → 计划 → 分镜 → 关键帧图 → 片段，含角色三步（建档 / 定妆 / 定锚） |
+| **InkOS 写作台**（`inkos`） | Vault 原生小说工程：章节、资产库、AI 续写，章节分镜可直接送入红果 Pro |
+| **无限画布**（`canvas`） | 节点图编排：文本 / 图片 / 视频节点、依赖连线、并行生成、首帧继承 |
+| **edge-tts 引擎**（配音面板 → 引擎） | 微软 edge-tts：9 音色 / 6 情感 / 3 语速 / 标点停顿。非 VIP 仍可用**豆包**（需 Key）与 **Audio8**（本机部署，免费），选项为禁用态而非静默失效 |
+| **8 种增量界面语言**（设置 → 界面语言） | 日语、韩语、俄语、阿拉伯语（RTL）、印地语、西班牙语、法语、德语。渐进式翻译包，覆盖核心 UI，未翻译项回退英文。语言包经 GitHub 热更新（多源竞速自动回退）获取，缓存于插件目录 `language/` 下（不占 `data.json`），支持设置内离线 zip 导入 / 导出。**简体中文与 English 永久免费** |
+
+其余面板 —— **文本、图像、视频、短剧、配音、解说、MTV、画廊、日志、白板渲染动画** —— 以及统一多厂商 API 管理、账号池、ffmpeg 后期，均 **永久免费**。
+剧本质量工具（剧本体检 / 改写 / 70 集拆分 / 锁定码设计 / 八步分镜 / 首尾帧继承）内置在**免费的文本面板**中。
+
+> **Obsidian 开发者政策合规**：本插件为 *可选付费*。免费档没有任何功能被移除以强制付费 —— VIP 面板均为增量增强。
+
+---
+
+## 安装
+
+### 从 GitHub Release 下载（推荐）
+
+1. 打开 GitHub Release 页面，下载最新版本的 **`.zip`** 压缩包
+2. 解压到 ` <YourVault>/.obsidian/plugins/agnes-ai-studio/`，确保目录结构如下：
+
+```
+<YourVault>/.obsidian/plugins/agnes-ai-studio/
+├── main.js
+├── manifest.json
+├── styles.css
+└── versions.json
+```
+
+3. 在 Obsidian 设置 → 第三方插件 → 启用 **Free AI Studio**
+4. 点击左侧边栏 ? 图标打开工作台
+
+### 前置依赖
+
+- **ffmpeg**（配音、成片、红果 Pro 合成阶段必需）：不随插件分发，需自行安装；探测不到时相关功能会自动降级隐藏
+  - Windows：`winget install ffmpeg` 或 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
+  - macOS：`brew install ffmpeg`
+  - Linux：`sudo apt install ffmpeg`
+
+---
+
+## 快速开始
+
+1. 打开工作台 → 右下角「打开设置」
+2. 填入至少一个厂商的 API Key（推荐 Agnes 主 Key，作为所有回退链的终点）
+3. 回到任一 Tab，输入内容 → 生成
+4. 产物直接落到 Vault 当前目录，Markdown 笔记带 frontmatter 便于双链与检索
+
+---
+
+## 厂商支持
+
+| 厂商 | 文本 | 图片 | 视频 | Base URL |
+|------|:---:|:---:|:---:|----------|
+| Agnes AI | ? | ? | ? | `api.agnes-ai.cn/v1` |
+| DeepSeek | ? | ? | ? | `api.deepseek.com/v1` |
+| OpenAI GPT | ? | ? | ? | `api.openai.com/v1` |
+| 通义千问 | ? | ? | ? | `dashscope.aliyun.com/...` |
+| 豆包 | ? | ? | ? | `ark.cn-beijing.volces.com/api/v3` |
+| MiniMax | ? | ? | ? | `api.minimaxi.com/v1` |
+| SenseNova | ? | ? | ? | `token.sensenova.cn/v1` |
+| Ollama | ? | ? | ? | `localhost:11434/v1` |
+
+### API Key 回退链
+
+```
+自定义模型 → {vendor}_key → text_api_key → agnes 全局 Key → agnes_extra_keys[0]
+```
+
+### 隐私与安全
+
+- API Key **桌面端经 Electron safeStorage 加密**落盘（`enc:v1:` 前缀），内存中仍为明文
+- 移动端或无系统凭据服务时回退明文；换机器或凭据失效时字段清空并提示
+- **本地模型**（Ollama）流量不出本机；其他厂商请求走对应 API
+
+---
+
+## 已知限制
+
+- **Edge-TTS 免费配音依赖未公开端点**：微软 2026 年 10 月升级了「大声朗读」协议
+  （`Sec-MS-GEC-Version` 前缀 `1-` → `2-`，token 格式改变）。本插件已实现 v2 签名
+  并保留 v1 作降级兜底，但 `speech.platform.bing.com` 不是公开 API、无 SLA，
+  微软可能再次收紧。商业使用请自行评估，或改用 **Audio8 本地引擎** / **豆包**路线。
+  分析见 [`doc/40-edge-tts-v2-and-compliance.md`](doc/40-edge-tts-v2-and-compliance.md)
+- **仅桌面端**：配音、成片与红果 Pro 的 ⑦ 合成、数字人口的 ④ 合成需 Node + 外部 ffmpeg
+- **文本生成无流式输出**：`requestUrl` 不支持 SSE
+- **大视频（>100MB）**：全量读入内存，可能 OOM
+- **封面**：不打包字体文件，中文渲染依赖系统字体栈
+- **多参考图**：支持多张 URL，但无"参考板合并"
+- **B-roll / InkOS / 无限画布面板**：已有单测与 ffmpeg 真跑验证，但尚未在 Obsidian 界面里点击验证
+
+---
+
+## 常见问题
+
+**Q：为什么启用后没有反应？**
+先确认 `manifest.json` 里 `minAppVersion` 与你的 Obsidian 版本匹配（当前要求 ≥ 1.7.2）。
+
+**Q：ffmpeg 报找不到？**
+命令行运行 `ffmpeg -version` 确认已安装且在 PATH 中。Obsidian 桌面端继承系统 PATH，命令行能跑通，Obsidian 里也能找到。
+
+**Q：edge-tts 出现 403？**
+三种原因：① 微软服务故障（自动识别 + 快速失败 + 明确提示）；② 本地时钟偏移（自动校正，会话级，最大 ±5 分钟）；③ 凭证错（罕见，3 次退避重试）。
+
+**Q：断点续跑怎么用？**
+三条主流水线（简化版短剧 / 红果 Pro / 数字人口播）每步都落盘，重启后回到面板会看到「断点续跑」按更新时间倒序列出历史运行。
+
+**Q：怎么更新插件？**
+到 Release 页面下载最新版覆盖 `.obsidian/plugins/free-ai-studio/` 下的 4 个文件，重启 Obsidian 即可。**注意**：设置存于 `data.json`，不在 zip 包内，覆盖不会丢配置。
+
+---
+
+## 第三方声明
+
+本插件不分发任何第三方模型权重，也不复制任何上游 TTS 推理代码。
+但有一处协议重实现（来源项目是 LGPL 授权）、一个驱动 Apache-2.0
+本地神经引擎的原创 Python sidecar，以及一处调用未公开的微软端点，
+这三件事必须写清楚。
+
+**Edge TTS —— 协议重实现，上游项目为 LGPLv3**
+
+免费配音引擎走的是 Edge 浏览器「大声朗读」的 WebSocket 协议。
+参考实现为 [rany2/edge-tts](https://github.com/rany2/edge-tts)，许可证为 **LGPLv3**
+（2024-11-22 重新授权；其 README 徽章仍写 MIT，那已经过时）。
+本插件是**独立实现**：签名步骤调用 Node 内置 `crypto.createHash`，
+未取用该项目的任何代码；ticks 算式由微软端点规定，
+而非从上游抄来。归属已记录在 `src/core/tts.ts` 的注释中。
+
+若将来移植该项目的 DRM/token 算法，则必须以 LGPLv3 发布并附完整 GPL + LGPL 全文。
+完整分析与三条实现路径见 `doc/40-edge-tts-v2-and-compliance.md`。
+
+**Edge TTS —— 未公开端点，无 SLA**
+
+`speech.platform.bing.com` 不是公开 API。微软 Edge EULA 明确禁止逆向工程
+与绕过技术限制。该端点无 SLA、无配额承诺、也不保证持续可用，
+且历史上已多次收紧（403 潮、端点切换、2026 年 10 月的 token 格式升级）。
+**「目前能用」是客观状态，不是合约授权。**
+商业部署请自行评估合规性，或改用 Audio8 本地引擎 / 豆包路线。
+
+完整分析见 [`doc/40-edge-tts-v2-and-compliance.md`](doc/40-edge-tts-v2-and-compliance.md)。
+
+**MOSS-TTS-Nano —— 本地神经引擎，Apache-2.0**
+
+可选的本地神经引擎以 Python sidecar 形式运行
+[OpenMOSS/MOSS-TTS-Nano](https://github.com/OpenMOSS/MOSS-TTS-Nano)
+（**Apache-2.0**，代码与权重同许可）。插件不分发权重、不复制上游代码：
+`scripts/moss/sidecar.py` 是原创的 FastAPI 服务壳，运行时从用户安装的模型目录
+import 上游 ONNX 推理运行时；约 784MB 权重由用户自行从 HuggingFace / ModelScope
+拉取。每段合成 WAV 都内嵌 `LIST/INFO/AIMD` 隐式 AI 来源标识
+（《互联网信息服务深度合成管理规定》§16），设置面板附音色克隆授权提示——
+参考音频须为本人或已书面授权的录音。完整归属与合规声明见
+[`THIRD_PARTY.md`](THIRD_PARTY.md)，移植调研见
+[`doc/66-tts-porting-plan.md`](doc/66-tts-porting-plan.md)，集成实录见
+[`doc/67-moss-integration.md`](doc/67-moss-integration.md)。
+
+---
+
+## 作者与支持
+
+- **作者**：xiaosong8584
+- **GitHub**：<https://github.com/xiaosong8584>
+- **推广 / 支持**：<https://afdian.com/a/xiaosong8584>
+- **B 站**：<https://space.bilibili.com/505631203>
+- **License**：MIT（详见 [`LICENSE`](./LICENSE)）
+
+---
+
+## 发布说明
+
+- 版本历史：[`CHANGELOG.md`](./CHANGELOG.md)

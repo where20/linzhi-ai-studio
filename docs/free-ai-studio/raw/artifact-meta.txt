@@ -1,0 +1,28 @@
+# 提取元数据 · free-ai-studio
+生成时间: 2026-11-04 13:58:34 CST
+
+## 文件清单
+total 2368
+drwxrwxr-x 14 xiaoan staff     448 2026-11-04 13:58 .
+drwxr-xr-x  9 xiaoan staff     288 2026-11-04 13:54 ..
+drwxr-xr-x  4 xiaoan staff     128 2026-11-04 13:58 .analysis
+-rw-rw-r--  1 xiaoan staff  208364 2026-11-03 12:37 CHANGELOG.md
+-rw-rw-r--  1 xiaoan staff    1060 2026-11-03 12:37 LICENSE
+-rw-rw-r--  1 xiaoan staff   14280 2026-11-03 12:37 README-cn.md
+-rw-rw-r--  1 xiaoan staff   14572 2026-11-03 12:37 README.md
+-rw-rw-r--  1 xiaoan staff    3087 2026-11-03 12:37 THIRD_PARTY.md
+-rw-r--r--  1 xiaoan staff    4677 2026-11-04 13:51 data.json
+drwxrwxr-x 11 xiaoan staff     352 2026-11-03 12:37 dist
+-rw-rw-r--  1 xiaoan staff 1982539 2026-11-03 12:37 main.js
+-rw-rw-r--  1 xiaoan staff     472 2026-11-03 12:37 manifest.json
+-rw-rw-r--  1 xiaoan staff  170198 2026-11-03 12:37 styles.css
+-rw-rw-r--  1 xiaoan staff    1756 2026-11-03 12:37 versions.json
+
+## main.js 规模
+1982539 main.js
+1576 main.js
+
+## 构建器
+
+## sourcemap
+none

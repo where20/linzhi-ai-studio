@@ -19,3 +19,10 @@ backup-*/
 .pw-browsers/
 .pw-shot/
 .workbuddy/
+
+# 引擎补丁产物（由 engine/vendor 经 patch.mjs 生成，可重建）
+engine/main.js
+engine/styles.css
+engine/versions.json
+# 上游发布快照（本地回滚源，勿入库）
+engine/vendor/upstream/

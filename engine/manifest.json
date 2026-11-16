@@ -1,0 +1,21 @@
+{
+	"id": "free-ai-studio",
+	"name": "Free AI Studio · 本地完整版",
+	"version": "0.18.0",
+	"minAppVersion": "1.7.2",
+	"description": "本地完整版（商业门禁已移除）：文本 / 图片 / 视频 / 配音 / 短剧 / 数字人 / 封面 / B-roll / InkOS / 无限画布全解锁，产物写入 Vault。桌面端专用。",
+	"author": "xiaosong8584",
+	"authorUrl": "https://github.com/xiaosong8584",
+	"isDesktopOnly": true,
+	"_localPatch": {
+		"by": "linzhi-ai-studio",
+		"patches": [
+			"vip-unlock",
+			"ad-popup",
+			"ad-mount",
+			"vip-settings-ui",
+			"vip-command-suffix"
+		],
+		"note": "上游升级后重跑 node engine/patch.mjs 即可"
+	}
+}

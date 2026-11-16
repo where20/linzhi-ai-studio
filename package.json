@@ -5,7 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "all": "node scripts/start-all.mjs",
+    "setup": "node scripts/start-all.mjs --setup-only",
+    "patch": "node engine/patch.mjs",
+    "install-engine": "node engine/install.mjs",
+    "sync": "node engine/sync-config.mjs",
+    "doctor": "node scripts/doctor.mjs"
   },
   "keywords": [
     "linzhi-ai",
