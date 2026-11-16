@@ -26,3 +26,6 @@ engine/styles.css
 engine/versions.json
 # 上游发布快照（本地回滚源，勿入库）
 engine/vendor/upstream/
+
+# 独立复刻线源码包（Free AI Studio 全栈，非本项目；含 Arphic License 数据，勿随本项目分发）
+docs/ai-studio-source/
