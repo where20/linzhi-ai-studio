@@ -429,7 +429,7 @@ async function rewriteAssetUrls(body) {
 // ===== 本地适配层：门禁放行 / 本地配置 / Agnes 直连 AI / RSS 热点 / 作品墙 / 上传 =====
 // ⚠️ 必须在 /api 代理之前注册，命中本地路由的请求不再转发原站
 // JSON 解析只对本地处理的 POST 路径生效（全局解析会吃掉流，导致代理转发失败）
-const LOCAL_JSON_RE = /^\/api\/(member|auth|account|config|ai\/chat|image\/(generate|img2img|batch-submit)|video\/generate|gallery|local\/(storyboard|pipeline|tts)|providers)/;
+const LOCAL_JSON_RE = /^\/api\/(member|auth|account|config|ai\/chat|image\/(generate|img2img|batch-submit)|video\/generate|gallery|local\/(storyboard|pipeline|tts)|providers|free\/)/;
 app.use('/api', (req, res, next) => {
     if (req.method === 'POST' && LOCAL_JSON_RE.test(req.originalUrl.split('?')[0])) return express.json()(req, res, next);
     next();

@@ -54,20 +54,45 @@ async function ctxFor(req) {
     return byok.resolveAiContext(req, _getConfig ? _getConfig() : {});
 }
 
-// ===== 免 Key 通道（Pollinations / imagefree / Veda，从 Free AI Studio bundle 逆向还原）=====
+// ===== 免 Key 通道（Pollinations / imagefree / Veda / SiftQ）=====
 // 无 AGNES Key 或显式 provider=free 时使用：文本 / 生图 / 视频 全部零 Key 可用
 let _free = null;
 async function getFree() {
     if (!_free) {
         const mod = await import('./lib/free-providers.mjs');
+        // Veda 指纹池：服务端以 X-Fp 头作为设备分组键，每个指纹 = 一个独立的 20 点/天额度池。
+        // VEDA_POOL_SIZE 默认 1（与官方行为一致）；调大即「多设备并行」使用官方 Demo。
+        const poolSize = Math.max(1, Number(process.env.VEDA_POOL_SIZE || 1) || 1);
+        let fingerprintPool = null;
+        if (poolSize > 0) {
+            const { VedaFingerprintPool } = await import('./lib/veda-fingerprint-pool.mjs');
+            fingerprintPool = new VedaFingerprintPool({
+                size: poolSize,
+                persistFile: path.join(OUTPUT_DIR, '.veda-fingerprints.json'),
+            });
+        }
         _free = Object.assign({}, mod, {
             veda: mod.makeVeda(
                 (process.env.VEDA_BASE_URL || mod.ENDPOINTS.veda),
-                mod.makeDeviceStore(path.join(OUTPUT_DIR, '.free-device.json'))
+                mod.makeDeviceStore(path.join(OUTPUT_DIR, '.free-device.json')),
+                { fingerprintPool }
             ),
+            fingerprintPool,
         });
     }
     return _free;
+}
+
+// ===== SiftQ 免账号 MiniMax-H3（图生视频，匿名 2 条/天，登录 4 条/天）=====
+let _siftq = null;
+async function getSiftq() {
+    if (!_siftq) {
+        const mod = await import('./lib/siftq-client.mjs');
+        _siftq = mod.makeSiftq({
+            deviceStore: mod.makeSiftqDeviceStore(path.join(OUTPUT_DIR, '.siftq-device.json')),
+        });
+    }
+    return _siftq;
 }
 
 // ===== 本地分镜工作台（替掉走源站的 dramapro）=====
@@ -321,6 +346,90 @@ function install(app, { getConfig, saveConfig }) {
     app.get('/api/config/status', async (req, res) => {
         const byok = await getByok();
         json(res, 200, byok.keyStatus(req, getConfig()));
+    });
+
+    /**
+     * 免 Key 视频通道额度总览：Veda（指纹池汇总）+ SiftQ
+     *
+     * ⚠️ 上游额度接口单次要 20 秒（它自己也在等自己的服务），所以这里加缓存：
+     *    · 前端打开抽屉立刻拿到上次结果
+     *    · 缓存 60 秒过期，后台静默刷新
+     *    · ?refresh=1 强制绕过缓存
+     */
+    const FREE_QUOTA_TTL = 60_000;
+    let freeQuotaCache = { at: 0, data: null };
+    let freeQuotaInflight = null;
+
+    async function computeFreeQuota() {
+        const out = { success: true, veda: null, siftq: null };
+        try {
+            const free = await getFree();
+            const q = await free.veda.quota();
+            const pools = await free.veda.poolStatus?.();
+            out.veda = {
+                ...q,
+                poolCount: pools?.length ?? 1,
+                pools: (pools || []).map((p) => ({ id: p.id, fp: p.fp, used: p.used, remaining: p.remaining, resetsAt: p.resetsAt })),
+                note: 'Veda 按 X-Fp 指纹分池，每个池独立 20 点/天',
+            };
+        } catch (e) {
+            out.veda = { error: (e && e.message) || 'Veda 额度读取失败' };
+        }
+        try {
+            const siftq = await getSiftq();
+            const u = await siftq.usage();
+            const c = await siftq.capabilities();
+            out.siftq = { ...u, capabilities: c, note: 'SiftQ 匿名 2 条/天，登录后 4 条/天' };
+        } catch (e) {
+            out.siftq = { error: (e && e.message) || 'SiftQ 额度读取失败' };
+        }
+        out.cachedAt = Date.now();
+        return out;
+    }
+
+    app.get('/api/free/video/quota', async (req, res) => {
+        const force = String(req.query?.refresh || '') === '1';
+        const fresh = freeQuotaCache.data && (Date.now() - freeQuotaCache.at) < FREE_QUOTA_TTL;
+        if (fresh && !force) {
+            return json(res, 200, { ...freeQuotaCache.data, cached: true });
+        }
+        // 有在途请求就复用，避免并发打上游
+        if (freeQuotaInflight) {
+            try {
+                const d = await freeQuotaInflight;
+                return json(res, 200, { ...d, cached: true });
+            } catch { /* 落到下面的兜底 */ }
+        }
+        freeQuotaInflight = computeFreeQuota();
+        try {
+            const data = await freeQuotaInflight;
+            freeQuotaCache = { at: Date.now(), data };
+            json(res, 200, data);
+        } catch (e) {
+            json(res, 200, { success: false, error: (e && e.message) || '额度读取失败', veda: null, siftq: null });
+        } finally {
+            freeQuotaInflight = null;
+        }
+    });
+
+    /**
+     * 设置 Veda 指纹池大小。
+     * ⚠️ 池 > 1 = 多「设备」并行使用官方 Demo（额度 = 池数 × 20 点/天）。
+     * 这是上游把风控字段 X-Fp 当设备分组键的实现缺陷所致，非官方授权额度。
+     * 默认 1（与官方行为一致）；调用方需显式设置才生效。
+     */
+    app.post('/api/free/video/veda-pool', async (req, res) => {
+        const size = Math.max(1, Math.min(20, Number((req.body || {}).size) || 1));
+        try {
+            const free = await getFree();
+            if (!free.fingerprintPool) return json(res, 200, { success: false, error: '指纹池未启用' });
+            const pools = await free.fingerprintPool.resize(size);
+            // 池变了，额度缓存作废
+            freeQuotaCache = { at: 0, data: null };
+            json(res, 200, { success: true, size, pools });
+        } catch (e) {
+            json(res, 200, { success: false, error: (e && e.message) || '设置失败' });
+        }
     });
 
     app.post('/api/config', async (req, res) => {
@@ -606,7 +715,45 @@ function install(app, { getConfig, saveConfig }) {
         const r = w / h;
         const aspectRatio = Math.abs(r - 9 / 16) < 0.02 ? '9:16' : Math.abs(r - 3 / 4) < 0.02 ? '3:4' : Math.abs(r - 4 / 3) < 0.02 ? '4:3' : Math.abs(r - 1) < 0.02 ? '1:1' : '16:9';
         const wantFree = ['free', 'veda'].includes(String(body.provider || '').toLowerCase());
+        const wantSiftq = String(body.provider || '').toLowerCase() === 'siftq';
         const useFree = wantFree || !ai.api_key || !!cfg.ai?.prefer_free;
+
+        // 免 Key 通道：SiftQ（免账号 MiniMax-H3，图生视频，匿名 2 条/天）
+        const submitSiftq = async (fallbackNote) => {
+            const siftq = await getSiftq();
+            const image = body.image || body.image_url || body.first_frame || body.firstFrame;
+            if (!image) {
+                throw new Error('SiftQ 是图生视频，必须提供输入图（image / image_url / first_frame）');
+            }
+            const dur = [6, 10, 15].includes(+body.seconds) ? +body.seconds : 6;
+            const ratio = ['9:16', '16:9', '1:1', '4:3'].includes(body.aspect) ? body.aspect : '9:16';
+            const out = await siftq.submit({
+                image,
+                prompt: prompt || undefined,
+                ratio,
+                duration: dur,
+            });
+            const taskId = 'siftq' + crypto.randomBytes(6).toString('hex');
+            videoTasks.set(taskId, {
+                id: taskId, provider: 'siftq', status: 'processing', model: 'minimax-h3/siftq',
+                prompt, started: Date.now(),
+                upstreamId: out.task_id, accessToken: out.access_token,
+                remaining: out.remaining ?? null,
+            });
+            saveVideoTasks();
+            return json(res, 200, {
+                success: true, task_id: taskId, deduped: false, provider: 'siftq', free_tier: true,
+                note: `SiftQ 免账号生成 · ${dur}s · 剩余 ${out.remaining ?? '?'} 条${fallbackNote || ''}`,
+            });
+        };
+
+        if (wantSiftq) {
+            try {
+                return await submitSiftq();
+            } catch (e) {
+                return json(res, 200, { success: false, error: (e && e.message) || 'SiftQ 提交失败' });
+            }
+        }
 
         // 免 Key 通道：Veda Studio（设备额度 20 点/天，5s=1 · 10s=2 · 15s=3）
         const submitVeda = async (fallbackNote) => {
@@ -615,18 +762,22 @@ function install(app, { getConfig, saveConfig }) {
             if (p.length < 32) p = `${p}，电影级光影，画面稳定，细节丰富，高清质感`;
             const sec = Math.min(15, Math.max(5, +body.seconds || 5));
             const aspect = ['16:9', '9:16', '4:3', '1:1'].includes(body.aspect) ? body.aspect : aspectRatio;
-            const { jobId } = await free.veda.submit({
+            // 槽位满了就排队等（上游 2 张 GPU 的并发上限，与额度无关）
+            const out = await free.veda.submit({
                 prompt: p, durationSec: sec, aspect, seed: body.seed ?? null, mode: body.mode === 'raw' ? 'raw' : 'enhance',
+                waitForSlot: true,
             });
+            const { jobId, poolId, quota } = out;
             const taskId = 'veda' + crypto.randomBytes(6).toString('hex');
             videoTasks.set(taskId, {
                 id: taskId, provider: 'veda', status: 'processing', model: 'veda/minimax-h3',
-                prompt: p, jobId, started: Date.now(),
+                prompt: p, jobId, poolId: poolId ?? null, started: Date.now(),
             });
             saveVideoTasks();
+            const quotaNote = quota ? `，本设备池剩 ${quota.remaining} 点` : '';
             return json(res, 200, {
                 success: true, task_id: taskId, deduped: false, provider: 'veda', free_tier: true,
-                note: `免 Key 生成 · ${free.nearestVedaDuration(sec)}s · 消耗 ${free.vedaChoiceNum(sec)} 点（每日 20 点）${fallbackNote || ''}`,
+                note: `免 Key 生成 · ${free.nearestVedaDuration(sec)}s · 消耗 ${free.vedaChoiceNum(sec)} 点（每设备池每日 20 点${quotaNote}）${fallbackNote || ''}`,
             });
         };
 
@@ -675,23 +826,81 @@ function install(app, { getConfig, saveConfig }) {
             return json(res, 200, { success: true, status: t.status, local_file: t.local_file, video_url: t.video_url, error: t.error, provider: t.provider });
         }
 
-        // ---- 免 Key：Veda 轮询 + 拉回本地 ----
-        if (t.provider === 'veda') {
+        // ---- 免 Key：SiftQ 轮询 + 拉回本地 ----
+        if (t.provider === 'siftq') {
             try {
-                const free = await getFree();
-                const snap = await free.veda.poll(t.jobId);
-                if (snap.status === 'done') {
-                    const bytes = await free.veda.fetchVideoBytes(t.jobId);
+                const siftq = await getSiftq();
+                const snap = await siftq.job(t.upstreamId, t.accessToken);
+                if (snap.status === 'succeeded') {
+                    const bytes = await siftq.contentBytes(t.upstreamId, t.accessToken);
                     const name = hashName('vid', 'mp4');
                     fs.writeFileSync(path.join(VIDEOS_DIR, name), bytes);
                     t.local_file = 'videos/' + name;
                     t.video_url = '/output/videos/' + name;
                     t.status = 'completed';
-                    t.enhanced_prompt = snap.enhancedPrompt || null;
                     saveVideoTasks();
                     return json(res, 200, {
                         success: true, status: 'completed', local_file: t.local_file,
+                        video_url: t.video_url, provider: 'siftq',
+                    });
+                }
+                if (snap.status === 'failed' || snap.status === 'canceled' || snap.status === 'cancelled') {
+                    t.status = 'failed';
+                    t.error = 'SiftQ 生成失败';
+                    saveVideoTasks();
+                    return json(res, 200, { success: false, status: 'failed', error: t.error, provider: 'siftq' });
+                }
+                return json(res, 200, {
+                    success: true, status: 'processing', provider: 'siftq',
+                    queue_position: snap.queuePosition, active_count: snap.activeCount,
+                });
+            } catch (e) {
+                t.status = 'failed';
+                t.error = (e && e.message) || 'SiftQ 轮询失败';
+                saveVideoTasks();
+                return json(res, 200, { success: false, status: 'failed', error: t.error, provider: 'siftq' });
+            }
+        }
+
+        // ---- 免 Key：Veda 轮询 + 拉回本地 ----
+        if (t.provider === 'veda') {
+            try {
+                const free = await getFree();
+                // 已下载完成 → 直接返回结果
+                if (t.status === 'completed' && t.local_file) {
+                    return json(res, 200, {
+                        success: true, status: 'completed', local_file: t.local_file,
                         video_url: t.video_url, provider: 'veda', enhanced_prompt: t.enhanced_prompt,
+                    });
+                }
+                // 上一轮判定 done 后已触发后台下载 → 报告「下载中」而不是同步阻塞
+                if (t.downloading) {
+                    return json(res, 200, {
+                        success: true, status: 'processing', provider: 'veda', downloading: true,
+                    });
+                }
+                const snap = await free.veda.poll(t.jobId);
+                if (snap.status === 'done') {
+                    // 上游出片后带宽很慢（几 MB 要几分钟）→ 后台下载，避免状态接口长时间挂住
+                    t.downloading = true;
+                    t.status = 'processing';
+                    saveVideoTasks();
+                    free.veda.fetchVideoBytes(t.jobId).then((bytes) => {
+                        const name = hashName('vid', 'mp4');
+                        fs.writeFileSync(path.join(VIDEOS_DIR, name), bytes);
+                        t.local_file = 'videos/' + name;
+                        t.video_url = '/output/videos/' + name;
+                        t.status = 'completed';
+                        t.downloading = false;
+                        t.enhanced_prompt = snap.enhancedPrompt || null;
+                        saveVideoTasks();
+                    }).catch((e) => {
+                        t.downloading = false;
+                        t.last_error = (e && e.message) || String(e);
+                        saveVideoTasks();
+                    });
+                    return json(res, 200, {
+                        success: true, status: 'processing', provider: 'veda', downloading: true,
                     });
                 }
                 if (snap.status === 'failed' || snap.status === 'cancelled') {
@@ -703,6 +912,7 @@ function install(app, { getConfig, saveConfig }) {
                 return json(res, 200, {
                     success: true, status: snap.status === 'queued' ? 'submitting' : 'processing',
                     progress: snap.progress, provider: 'veda',
+                    ...(snap.transient ? { note: '上游响应抖动，继续等待' } : {}),
                 });
             } catch (e) {
                 // 单次查询/下载失败不终止任务，但记下原因便于排查

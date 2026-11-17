@@ -141,7 +141,20 @@
             '.fusion-status .dot.byok{background:#BA7517}',
             '.fusion-hint{font-size:12px;color:var(--text2,#6b7280);margin:6px 0 0}',
             '.fusion-ok{color:#0F6E56}.fusion-err{color:#A32D2D}',
-            '.fusion-opt{margin-left:6px}'
+            '.fusion-opt{margin-left:6px}',
+            '.fusion-quota{margin:0 0 18px;padding:12px 13px;border:1px solid var(--border,#e5e7eb);border-radius:10px;background:var(--bg2,#f8fafc)}',
+            '.fusion-quota .q-title{font-size:13px;font-weight:600;margin-bottom:8px}',
+            '.fusion-quota .q-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;padding:3px 0;color:var(--text2,#6b7280)}',
+            '.fusion-quota .q-row b{color:var(--text,#1f2329);font-weight:600}',
+            '.fusion-quota .q-hi{color:#0F6E56;font-weight:700}',
+            '.fusion-quota .q-err{color:#A32D2D}',
+            '.fusion-quota .q-pools{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 2px}',
+            '.fusion-quota .q-pool{font:11px/1 ui-monospace,monospace;padding:4px 7px;border-radius:6px;background:rgba(24,95,165,.1);color:#185FA5}',
+            '.fusion-quota .q-tools{gap:6px;margin-top:8px}',
+            '.fusion-quota .q-tools select{padding:4px 7px;border:1px solid var(--border,#d1d5db);border-radius:6px;background:var(--bg,#fff);color:var(--text,#1f2329);font-size:12px}',
+            '.fusion-quota .q-btn{padding:4px 10px;border:1px solid var(--border,#d1d5db);border-radius:6px;background:var(--bg,#fff);color:var(--text,#1f2329);cursor:pointer;font-size:12px}',
+            '.fusion-quota .q-btn:hover{border-color:#378ADD;color:#185FA5}',
+            '.fusion-quota .q-hint{font-size:11px;color:var(--text2,#6b7280)}'
         ].join('\n');
         var el = document.createElement('style');
         el.id = 'fusionStyles';
@@ -338,7 +351,112 @@
         if (panel) panel.insertBefore(wrap, panel.firstChild);
     }
 
-    // ---------- P1-1: 通用草稿防刷新（覆盖 textarea/input） ----------
+    // ---------- 免 Key 视频通道额度面板 ----------
+    // Veda：服务端以 X-Fp 指纹作为设备分组键，每个指纹 = 独立 20 点/天额度池
+    // SiftQ：免账号 MiniMax-H3，图生视频，匿名 2 条/天（按出口 IP 分池）
+    function fetchFreeQuota() {
+        return fetch('/api/free/video/quota', { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .catch(function () { return null; });
+    }
+    function setVedaPool(size) {
+        return fetch('/api/free/video/veda-pool', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ size: size })
+        }).then(function (r) { return r.json(); });
+    }
+    function renderQuotaInto(el, data) {
+        if (!data) {
+            el.innerHTML = '<div class="q-title">免 Key 视频额度</div>' +
+                '<div class="q-body"><span class="q-err">额度读取失败</span></div>';
+            return;
+        }
+        var v = data.veda || {}, s = data.siftq || {};
+        var html = '';
+        if (v.error) {
+            html += '<div class="q-row"><b>Veda</b><span class="q-err">' + v.error + '</span></div>';
+        } else {
+            html += '<div class="q-row"><b>Veda Studio</b><span>' +
+                '剩余 <b class="q-hi">' + (v.remaining != null ? v.remaining : '?') + '</b> / ' +
+                (v.limit != null ? v.limit : '?') + ' 点 · ' + (v.poolCount || 1) + ' 个池</span></div>';
+            if (v.pools && v.pools.length) {
+                html += '<div class="q-pools">' + v.pools.map(function (p) {
+                    return '<span class="q-pool" title="' + (p.fp || '') + '">#' + p.id + ' ' +
+                        (p.remaining != null ? p.remaining : '?') + '</span>';
+                }).join('') + '</div>';
+            }
+            html += '<div class="q-row q-tools">池大小 <select id="fusionVedaPool">' +
+                [1, 2, 3, 4, 5].map(function (n) {
+                    return '<option value="' + n + '"' + ((v.poolCount || 1) === n ? ' selected' : '') + '>' + n + '</option>';
+                }).join('') +
+                '</select><button id="fusionPoolApply" class="q-btn">应用</button>' +
+                '<span class="q-hint">每池 20 点/天（上游以浏览器指纹分组）</span></div>';
+        }
+        if (s.error) {
+            html += '<div class="q-row"><b>SiftQ</b><span class="q-err">' + s.error + '</span></div>';
+        } else {
+            html += '<div class="q-row"><b>SiftQ H3</b><span>剩余 <b class="q-hi">' +
+                (s.remaining != null ? s.remaining : '?') + '</b> / ' + (s.limit != null ? s.limit : '?') +
+                ' 条' + (s.authenticated ? '（已登录）' : '（匿名）') + '</span></div>';
+        }
+        el.innerHTML = '<div class="q-title">免 Key 视频额度</div><div class="q-body">' + html + '</div>';
+
+        var sel = el.querySelector('#fusionVedaPool');
+        var btn = el.querySelector('#fusionPoolApply');
+        if (sel && btn) {
+            btn.onclick = function () {
+                btn.disabled = true; btn.textContent = '应用中…';
+                setVedaPool(+sel.value).then(function (r) {
+                    btn.disabled = false; btn.textContent = '应用';
+                    if (r && r.success) refreshQuotaPanel();
+                    else refreshQuotaPanel();
+                }).catch(function () {
+                    btn.disabled = false; btn.textContent = '应用';
+                });
+            };
+        }
+    }
+    function refreshQuotaPanel() {
+        var el = document.getElementById('fusionQuotaPanel');
+        if (!el) return;
+        var body = el.querySelector('.q-body');
+        if (body) body.innerHTML = '读取中…';
+        // 上游额度查询偶发慢/空响应，加超时兜底，别让面板一直卡在「读取中」
+        var done = false;
+        var timer = setTimeout(function () {
+            if (done) return;
+            done = true;
+            var b = el.querySelector('.q-body');
+            if (b && /读取中/.test(b.textContent)) {
+                b.innerHTML = '<span class="q-err">额度读取超时，点下方按钮重试</span>';
+            }
+        }, 20000);
+        fetchFreeQuota().then(function (d) {
+            if (done) return;
+            done = true; clearTimeout(timer);
+            renderQuotaInto(el, d);
+        }).catch(function () {
+            if (done) return;
+            done = true; clearTimeout(timer);
+            renderQuotaInto(el, null);
+        });
+    }
+    function mountQuotaPanel() {
+        if (document.getElementById('fusionQuotaPanel')) return refreshQuotaPanel();
+        var host = document.getElementById('fusionPanel');
+        if (!host) {
+            // 抽屉还没建（buildKeyPanel 晚于本函数），退到顶栏
+            host = document.querySelector('.header-right');
+            if (!host) return;
+        }
+        var wrap = document.createElement('div');
+        wrap.id = 'fusionQuotaPanel';
+        wrap.className = 'fusion-quota';
+        wrap.innerHTML = '<div class="q-title">免 Key 视频额度</div><div class="q-body">读取中…</div>';
+        host.insertBefore(wrap, host.firstChild);
+        refreshQuotaPanel();
+    }
     function installDraft() {
         if (window.__fusionDraftOn) return;
         window.__fusionDraftOn = true;
@@ -500,6 +618,8 @@
         enhanceModels();
         installShapeToggle();
         installContentTabs();
+        buildKeyPanel();
+        mountQuotaPanel();
         // 低频兜底：SPA 异步渲染时补挂
         var tries = 0;
         var t = setInterval(function () {
